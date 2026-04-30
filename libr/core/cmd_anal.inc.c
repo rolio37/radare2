@@ -635,7 +635,7 @@ static RCoreHelpMessage help_msg_afbt = {
 	"afbtj", "", "show switch info in JSON",
 	"afbt*", "", "print r2 commands to recreate the switch",
 	"afbt-", "", "remove user-pinned override at current op",
-	"afbt", " tbl esz n seg", "legacy positional form (compat with old afbt/afj)",
+	"afbt", " tbl esz n seg", "legacy positional form (compat with old afbt)",
 	"afbt", " k=v [k=v ...]", "keyword form, see fields below",
 	"Fields:", "", "",
 	"tbl=ADDR", "", "jump table base (required)",
@@ -3906,7 +3906,7 @@ static void afbt_show_swop(RCore *core, RAnalBlock *block, int mode) {
 	}
 	if (mode == '*') {
 		r_cons_printf (core->cons,
-			"afbt @ 0x%"PFMT64x" tbl=0x%"PFMT64x" esz=%d n=%d",
+			"'0x%08"PFMT64x"'afbt tbl=0x%"PFMT64x" esz=%d n=%d",
 			sop->addr, sop->daddr, sop->dsize, sop->amount);
 		if (sop->shift) {
 			r_cons_printf (core->cons, " shift=%u", sop->shift);
@@ -3980,7 +3980,17 @@ static void cmd_afbt(RCore *core, const char *input) {
 	const char *args = (first == ' ' || first == '*' || first == 'j' || first == '\0')
 		? r_str_trim_head_ro (input + (first ? 1 : 0))
 		: r_str_trim_head_ro (input);
-	if (first == 'j' || first == '*' || (first == '\0' && (!args || !*args))) {
+	if (first == 'j' || first == '*') {
+		if (args && *args) {
+			r_core_return_invalid_command (core, "afbt", first);
+			r_list_free (blocks);
+			return;
+		}
+		afbt_show_swop (core, block, first);
+		r_list_free (blocks);
+		return;
+	}
+	if (first == '\0' && (!args || !*args)) {
 		afbt_show_swop (core, block, first == '\0' ? ' ' : first);
 		r_list_free (blocks);
 		return;

@@ -774,3 +774,66 @@ EXPECT=<<EOF
 0x00000622 0x00000633 00:0000 17 j 0x000005ab
 EOF
 RUN
+
+NAME=afbt star output uses call-at syntax
+FILE=malloc://1024
+CMDS=<<EOF
+e asm.arch=x86
+e asm.bits=64
+wx c3 @ 0x100
+wx c3 @ 0x300
+wx c3 @ 0x320
+wx 000300000000000020030000 @ 0x200
+wx 010203 @ 0x240
+s 0x100
+af+ 0x100 sparse_switch
+afb+ 0x100 0x100 1
+afbt tbl=0x200 esz=4 n=3 vtbl=0x240 vsz=1 sparse=1 base=0
+afbt*
+afbt* > /tmp/r2r-afbt-star.r2
+f- case.0x100.1
+f- case.0x100.3
+f- switch.0x100
+af- $$
+af+ 0x100 sparse_switch
+afb+ 0x100 0x100 1
+. /tmp/r2r-afbt-star.r2
+?e --
+f~case.
+!rm -f /tmp/r2r-afbt-star.r2
+EOF
+EXPECT=<<EOF
+'0x00000100'afbt tbl=0x200 esz=4 n=3 base=0x0 vtbl=0x240 vsz=1 sparse=1
+--
+0x00000300 1 case.0x100.1
+0x00000320 1 case.0x100.3
+EOF
+RUN
+
+NAME=afbt sparse skips zero sentinel entries
+FILE=malloc://1024
+CMDS=<<EOF
+e asm.arch=x86
+e asm.bits=64
+wx c3 @ 0x100
+wx c3 @ 0x300
+wx c3 @ 0x320
+wx 000300000000000020030000 @ 0x200
+wx 010203 @ 0x240
+s 0x100
+af+ 0x100 sparse_switch
+afb+ 0x100 0x100 1
+afbt tbl=0x200 esz=4 n=3 vtbl=0x240 vsz=1 sparse=1 base=0
+f~case.
+?e --
+C~Cd 4
+EOF
+EXPECT=<<EOF
+0x00000300 1 case.0x100.1
+0x00000320 1 case.0x100.3
+--
+0x00000200 data Cd 4
+0x00000204 data Cd 4
+0x00000208 data Cd 4
+EOF
+RUN

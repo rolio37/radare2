@@ -278,16 +278,24 @@ static ut64 switch_read_entry(const ut8 *raw, ut8 esize, bool signed_entry) {
 	return v;
 }
 
+typedef enum {
+	SWITCH_TARGET_STOP,
+	SWITCH_TARGET_SKIP,
+	SWITCH_TARGET_OK,
+} SwitchTargetResult;
+
 // Compute the target address for a single jump-table entry given the
 // flags. Mirrors IDA's `target = elbase ± (entry << shift)` formula
 // plus SELFREL (target = entry_addr + entry).
-// Returns false to indicate "stop walking" (entry is invalid).
-static bool switch_compute_target(const RAnalSwitchSpec *spec,
+static SwitchTargetResult switch_compute_target(const RAnalSwitchSpec *spec,
 	ut64 entry_addr,
 	ut64 raw_entry,
 	ut64 *out) {
 	if (raw_entry == 0 && ! (spec->flags & R_ANAL_SWITCH_F_SELFREL)) {
-		return false;
+		if (spec->flags & R_ANAL_SWITCH_F_SPARSE) {
+			return SWITCH_TARGET_SKIP;
+		}
+		return SWITCH_TARGET_STOP;
 	}
 	ut64 shifted = raw_entry;
 	if (spec->shift) {
@@ -297,7 +305,7 @@ static bool switch_compute_target(const RAnalSwitchSpec *spec,
 	}
 	if (spec->flags & R_ANAL_SWITCH_F_SELFREL) {
 		*out = entry_addr + (st64)shifted;
-		return true;
+		return SWITCH_TARGET_OK;
 	}
 	const ut64 base = (spec->flags & R_ANAL_SWITCH_F_BASE)
 		? spec->base
@@ -307,7 +315,7 @@ static bool switch_compute_target(const RAnalSwitchSpec *spec,
 	} else {
 		*out = base + shifted;
 	}
-	return true;
+	return SWITCH_TARGET_OK;
 }
 
 static void apply_switch(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut64 switch_addr, ut64 jmptbl_addr, ut64 cases_count, ut64 default_case_addr, int esize) {
@@ -506,7 +514,7 @@ static bool switch_apply_flagged(RAnal *anal, RAnalFunction *fcn, RAnalBlock *bl
 		ut64 jmpptr = UT64_MAX;
 		if (insn_entry) {
 			jmpptr = entry_addr;
-		} else if (!switch_compute_target (spec, entry_addr, raw, &jmpptr)) {
+		} else if (switch_compute_target (spec, entry_addr, raw, &jmpptr) != SWITCH_TARGET_OK) {
 			jmpptr = UT64_MAX;
 		}
 		if (jmpptr != UT64_MAX) {
@@ -554,8 +562,16 @@ static bool switch_apply_flagged(RAnal *anal, RAnalFunction *fcn, RAnalBlock *bl
 			// The entry IS an inline branch instruction: its address is
 			// what the dispatcher branches to.
 			jmpptr = entry_addr;
-		} else if (!switch_compute_target (spec, entry_addr, raw, &jmpptr)) {
-			break;
+		} else {
+			SwitchTargetResult target_result = switch_compute_target (spec, entry_addr, raw, &jmpptr);
+			if (target_result == SWITCH_TARGET_STOP) {
+				break;
+			}
+			if (target_result == SWITCH_TARGET_SKIP) {
+				r_meta_set_data_at (anal, entry_addr, esize);
+				r_anal_hint_set_immbase (anal, entry_addr, 10);
+				continue;
+			}
 		}
 		if (anal->limit && (jmpptr < anal->limit->from || jmpptr > anal->limit->to)) {
 			break;

@@ -375,6 +375,18 @@ ERROR: Invalid `x` subcommand, try `afbt?`
 EOF
 RUN
 
+NAME=afbt display modes reject args
+FILE=-
+CMDS=<<EOF
+afbtj tbl=0x10
+afbt* tbl=0x10
+EOF
+EXPECT_ERR=<<EOF
+ERROR: Invalid `j` subcommand, try `afbt?`
+ERROR: Invalid `*` subcommand, try `afbt?`
+EOF
+RUN
+
 NAME=duplicate af+
 FILE=-
 CMDS=<<EOF
