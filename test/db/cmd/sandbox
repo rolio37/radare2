@@ -92,26 +92,24 @@ malloc://512
 EOF
 RUN
 
-NAME=sandbox grain=none blocks environ
-FILE=-
-CMDS=<<EOF
-e cfg.sandbox.grain=none
-e cfg.sandbox=true
-%SHELL
-EOF
-EXPECT=<<EOF
-EOF
-RUN
-
 NAME=sandbox grain=environ allows environ
 FILE=-
 CMDS=<<EOF
 e cfg.sandbox.grain=environ
 e cfg.sandbox=true
-%SHELL
+?e empty
+%SHELL~?
+?e empty
+e cfg.sandbox.grain=none
+%SHELL~?
+?e empty
 EOF
 EXPECT=<<EOF
-/bin/bash
+empty
+1
+empty
+0
+empty
 EOF
 RUN
 
