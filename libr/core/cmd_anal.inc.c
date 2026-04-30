@@ -6502,6 +6502,14 @@ static int cmd_af(RCore *core, const char *input) {
 			break;
 		case 't': // "afbt"
 			{
+				if (input[3] == '?') {
+					r_core_cmd_help_contains (core, help_msg_afb, "afbt");
+					break;
+				}
+				if (input[3] && input[3] != ' ') {
+					r_core_return_invalid_command (core, "afbt", input[3]);
+					break;
+				}
 				RList *blocks = r_anal_get_blocks_in (core->anal, core->addr);
 				RAnalBlock *block = r_list_first (blocks);
 				if (block && !r_list_empty (block->fcns)) {
@@ -6514,6 +6522,7 @@ static int cmd_af(RCore *core, const char *input) {
 					int depth = 50;
 					r_anal_jmptbl_walk (core->anal, r_list_first (block->fcns), block,
 						depth, core->addr, 0, table, seg, sz, elements, 0, false);
+					r_list_free (argv);
 					free (args);
 				} else {
 					R_LOG_ERROR ("No function defined here");

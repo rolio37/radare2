@@ -359,6 +359,22 @@ diff: type: new
 EOF
 RUN
 
+NAME=afbt help
+FILE=-
+CMDS=afbt?
+EXPECT=<<EOF
+| afbt [tableaddr] [elem_sz] [count] [seg]  analyze function jumptable (adding seg to each elem)
+EOF
+RUN
+
+NAME=afbt invalid suffix
+FILE=-
+CMDS=afbtx
+EXPECT_ERR=<<EOF
+ERROR: Invalid `x` subcommand, try `afbt?`
+EOF
+RUN
+
 NAME=duplicate af+
 FILE=-
 CMDS=<<EOF
