@@ -168,6 +168,7 @@ typedef struct r_socket_http_request {
 	ut8 *data;
 	int data_length;
 	bool auth;
+	RList *headers; /* Name: value */
 } RSocketHTTPRequest;
 
 R_API RSocketHTTPRequest *r_socket_http_accept(RSocket *s, RSocketHTTPOptions *so);
@@ -175,6 +176,7 @@ R_API void r_socket_http_response(RSocketHTTPRequest *rs, int code, const char *
 R_API void r_socket_http_close(RSocketHTTPRequest *rs);
 R_API ut8 *r_socket_http_handle_upload(const ut8 *str, int len, int *olen);
 R_API void r_socket_http_free(RSocketHTTPRequest *rs);
+R_API const char *r_socket_http_header(RSocketHTTPRequest *rs, const char *name);
 
 typedef int (*rap_server_open)(void *user, const char *file, int flg, int mode);
 typedef int (*rap_server_seek)(void *user, ut64 offset, int whence);
