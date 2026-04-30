@@ -200,9 +200,8 @@ static void apply_case(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut64 
 		r_anal_block_add_switch_case (block, switch_addr, id, case_addr);
 	}
 	if (anal->flb.set) {
-		char flagname[64];
 		const int iid = R_ABS ((int)id);
-		snprintf (flagname, sizeof (flagname), "case.0x%" PFMT64x ".%d", (ut64)switch_addr, iid);
+		r_strf_var (flagname, 64, "case.0x%" PFMT64x ".%d", (ut64)switch_addr, iid);
 		anal->flb.set (anal->flb.f, flagname, case_addr, 1);
 	}
 }
@@ -349,8 +348,44 @@ R_API bool r_anal_jmptbl(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut6
 	return r_anal_jmptbl_walk (anal, fcn, block, depth, jmpaddr, 0, table, table, tablesize, tablesize, default_addr, false);
 }
 
-// Forward declaration: defined later in this file.
-static inline void analyze_new_case(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut64 ip, ut64 jmpptr, int depth);
+static inline void analyze_new_case(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut64 ip, ut64 jmpptr, int depth) {
+	const ut64 block_size = block? block->size: 0;
+	r_anal_function_materialize_switch_case (anal, fcn, jmpptr, depth);
+	if (block && block->size != block_size) {
+		// block was split during anal and does not contain the
+		// jmp instruction anymore, so we need to search for it and get it again
+		RAnalSwitchOp *sop = block->switch_op;
+		block = r_anal_get_block_at (anal, ip);
+		if (!block) {
+			block = r_anal_bb_from_offset (anal, ip);
+			if (!block) {
+				R_LOG_ERROR ("Major disaster at 0x%08" PFMT64x, ip);
+				return;
+			}
+			if (block->addr != ip) {
+				if (anal->opt.jmptbl_split) {
+					// split the block so switch instruction is at the start of its block
+					RAnalBlock *newblock = r_anal_block_split (block, ip);
+					if (newblock) {
+						r_unref (newblock);
+						block = r_anal_get_block_at (anal, ip);
+					}
+					if (!block) {
+						R_LOG_ERROR ("Failed to split block for switch at 0x%08" PFMT64x, ip);
+						return;
+					}
+				} else {
+					st64 d = block->addr - ip;
+					R_LOG_WARN ("Cannot find basic block case for jmptbl switch from 0x%08" PFMT64x " bbdelta = %d. Try -e anal.jmptbl.split=true and let us know", ip, (int)R_ABS (d));
+					block = NULL;
+					return;
+				}
+			}
+		}
+		block->switch_op = sop;
+	}
+}
+
 
 // --- Persistence ---------------------------------------------------------
 // User-pinned switch overrides live in a flat sdb namespace under
@@ -361,28 +396,32 @@ static inline void analyze_new_case(RAnal *anal, RAnalFunction *fcn, RAnalBlock 
 // are silently skipped.
 
 static Sdb *switch_sdb(RAnal *anal, bool create) {
-	if (!anal || !anal->sdb) {
-		return NULL;
-	}
 	return sdb_ns (anal->sdb, SWITCH_SDB_NS, create);
 }
 
-static void switch_spec_serialize(const RAnalSwitchSpec *spec, char *out, size_t outsz) {
-	int n = snprintf (out, outsz, "j=0x%" PFMT64x ",e=%u,n=%u,s=%u,b=0x%" PFMT64x ",d=0x%" PFMT64x ",v=0x%" PFMT64x ",V=%u,L=%" PFMT64d ",F=0x%x", spec->jtbl_addr, (unsigned)spec->esize, (unsigned)spec->ncases, (unsigned)spec->shift, spec->base, spec->defjump, spec->vtbl_addr, (unsigned)spec->vsize, spec->lowcase, (unsigned)spec->flags);
-	if (spec->reg && n > 0 && (size_t)n < outsz) {
-		snprintf (out + n, outsz - n, ",r=%s", spec->reg);
+static char *switch_spec_serialize(const RAnalSwitchSpec *spec) {
+	RStrBuf *sb = r_strbuf_new (NULL);
+	// clang-format off
+	r_strbuf_appendf (sb,
+		"j=0x%" PFMT64x ",e=%u,n=%u,"
+		"s=%u,b=0x%" PFMT64x ",d=0x%" PFMT64x ",v=0x%" PFMT64x
+		",V=%u,L=%" PFMT64d ",F=0x%x",
+		spec->jtbl_addr, (unsigned)spec->esize, (unsigned)spec->ncases,
+		(unsigned)spec->shift, spec->base, spec->defjump, spec->vtbl_addr,
+		(unsigned)spec->vsize, spec->lowcase, (unsigned)spec->flags);
+	// clang-format on
+	if (spec->reg) {
+		r_strbuf_appendf (sb, ",r=%s", spec->reg);
 	}
+	return r_strbuf_drain (sb);
 }
 
 static void switch_spec_deserialize(RAnal *anal, const char *s, RAnalSwitchSpec *out) {
 	r_anal_switch_spec_init (out);
-	if (!s || !*s) {
+	if (R_STR_ISEMPTY (s)) {
 		return;
 	}
 	char *dup = strdup (s);
-	if (!dup) {
-		return;
-	}
 	char *save = NULL;
 	char *tok;
 	for (tok = r_str_tok_r (dup, ",", &save); tok; tok = r_str_tok_r (NULL, ",", &save)) {
@@ -401,11 +440,7 @@ static void switch_spec_deserialize(RAnal *anal, const char *s, RAnalSwitchSpec 
 		case 'V': out->vsize = (ut8)r_num_get (NULL, v); break;
 		case 'L': out->lowcase = (st64)r_num_get (NULL, v); break;
 		case 'F': out->flags = (ut32)r_num_get (NULL, v); break;
-		case 'r':
-			if (anal) {
-				out->reg = r_str_constpool_get (&anal->constpool, v);
-			}
-			break;
+		case 'r': out->reg = r_str_constpool_get (&anal->constpool, v); break;
 		default: break;
 		}
 	}
@@ -415,28 +450,16 @@ static void switch_spec_deserialize(RAnal *anal, const char *s, RAnalSwitchSpec 
 R_API bool r_anal_switch_set(RAnal *anal, ut64 startea, const RAnalSwitchSpec *spec) {
 	R_RETURN_VAL_IF_FAIL (anal && spec, false);
 	Sdb *db = switch_sdb (anal, true);
-	if (!db) {
-		return false;
-	}
-	char key[32];
-	snprintf (key, sizeof (key), "0x%" PFMT64x, startea);
-	char buf[256];
-	switch_spec_serialize (spec, buf, sizeof (buf));
-	return sdb_set (db, key, buf, 0) != 0;
+	r_strf_var (key, 32, "0x%" PFMT64x, startea);
+	char *value = switch_spec_serialize (spec);
+	return sdb_set_owned (db, key, value, 0) != 0;
 }
 
 R_API bool r_anal_switch_get(RAnal *anal, ut64 startea, RAnalSwitchSpec *out) {
 	R_RETURN_VAL_IF_FAIL (anal && out, false);
 	Sdb *db = switch_sdb (anal, false);
-	if (!db) {
-		return false;
-	}
-	char key[32];
-	snprintf (key, sizeof (key), "0x%" PFMT64x, startea);
+	r_strf_var (key, 32, "0x%" PFMT64x, startea);
 	const char *v = sdb_const_get (db, key, NULL);
-	if (!v) {
-		return false;
-	}
 	switch_spec_deserialize (anal, v, out);
 	out->startea = startea;
 	return true;
@@ -445,11 +468,7 @@ R_API bool r_anal_switch_get(RAnal *anal, ut64 startea, RAnalSwitchSpec *out) {
 R_API void r_anal_switch_unset(RAnal *anal, ut64 startea) {
 	R_RETURN_IF_FAIL (anal);
 	Sdb *db = switch_sdb (anal, false);
-	if (!db) {
-		return;
-	}
-	char key[32];
-	snprintf (key, sizeof (key), "0x%" PFMT64x, startea);
+	r_strf_var (key, 32, "0x%" PFMT64x, startea);
 	sdb_unset (db, key, 0);
 }
 
@@ -654,44 +673,6 @@ R_API bool r_anal_switch_apply(RAnal *anal, RAnalFunction *fcn, RAnalBlock *bloc
 	return ret;
 }
 
-static inline void analyze_new_case(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut64 ip, ut64 jmpptr, int depth) {
-	const ut64 block_size = block? block->size: 0;
-	r_anal_function_materialize_switch_case (anal, fcn, jmpptr, depth);
-	if (block && block->size != block_size) {
-		// block was split during anal and does not contain the
-		// jmp instruction anymore, so we need to search for it and get it again
-		RAnalSwitchOp *sop = block->switch_op;
-		block = r_anal_get_block_at (anal, ip);
-		if (!block) {
-			block = r_anal_bb_from_offset (anal, ip);
-			if (!block) {
-				R_LOG_ERROR ("Major disaster at 0x%08" PFMT64x, ip);
-				return;
-			}
-			if (block->addr != ip) {
-				if (anal->opt.jmptbl_split) {
-					// split the block so switch instruction is at the start of its block
-					RAnalBlock *newblock = r_anal_block_split (block, ip);
-					if (newblock) {
-						r_unref (newblock);
-						block = r_anal_get_block_at (anal, ip);
-					}
-					if (!block) {
-						R_LOG_ERROR ("Failed to split block for switch at 0x%08" PFMT64x, ip);
-						return;
-					}
-				} else {
-					st64 d = block->addr - ip;
-					R_LOG_WARN ("Cannot find basic block case for jmptbl switch from 0x%08" PFMT64x " bbdelta = %d. Try -e anal.jmptbl.split=true and let us know", ip, (int)R_ABS (d));
-					block = NULL;
-					return;
-				}
-			}
-		}
-		block->switch_op = sop;
-	}
-}
-
 typedef struct {
 	bool arm;
 	bool x86;
@@ -708,8 +689,7 @@ static bool jmptbl_detect_arch(RAnal *anal, JmptblArch *a) {
 	a->arm = r_str_startswith (sarch, "arm");
 	a->x86 = !a->arm && r_str_startswith (sarch, "x86");
 	a->mips = !a->arm && !a->x86 && r_str_startswith (sarch, "mips");
-	a->v850 = !a->arm && !a->x86 && (r_str_startswith (sarch, "v850")
-		|| r_str_startswith (anal->coreb.cfgGet (anal->coreb.core, "asm.cpu"), "v850"));
+	a->v850 = !a->arm && !a->x86 && (r_str_startswith (sarch, "v850") || r_str_startswith (anal->coreb.cfgGet (anal->coreb.core, "asm.cpu"), "v850"));
 	return true;
 }
 

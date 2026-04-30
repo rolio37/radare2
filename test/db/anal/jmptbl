@@ -837,3 +837,22 @@ EXPECT=<<EOF
 0x00000208 data Cd 4
 EOF
 RUN
+
+NAME=afbt user override preserves long register name
+FILE=malloc://1024
+CMDS=<<EOF
+e asm.arch=x86
+e asm.bits=64
+wx c3 @ 0x100
+wx c3 @ 0x300
+wx 00030000 @ 0x200
+s 0x100
+af+ 0x100 long_reg_switch
+afb+ 0x100 0x100 1
+afbt tbl=0x200 esz=4 n=1 base=0 reg=reg_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz user=1
+k anal/switches/0x100
+EOF
+EXPECT=<<EOF
+j=0x200,e=4,n=1,s=0,b=0x0,d=0xffffffffffffffff,v=0xffffffffffffffff,V=0,L=0,F=0x300,r=reg_abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz
+EOF
+RUN
