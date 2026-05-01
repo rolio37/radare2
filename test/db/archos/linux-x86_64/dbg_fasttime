@@ -21,6 +21,7 @@ ood
 e dbg.fasttime=true
 dcs clock_nanosleep nanosleep
 dr SN
+dk 9
 q!
 EOF
 EXPECT=<<EOF
