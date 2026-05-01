@@ -17,7 +17,7 @@ R_API RDebugSnap *r_debug_snap_map(RDebug *dbg, RDebugMap *map) {
 		return NULL;
 	}
 	// TODO: Support streaming memory snapshots to avoid big allocations
-	if (map->size > dbg->maxsnapsize) {
+	if (map->size > dbg->options.maxsnapsize) {
 		char *us = r_num_units (NULL, 0, map->size);
 		const char *name = r_str_get (map->name);
 		R_LOG_ERROR ("Not snapping map %s (%s > dbg.maxsnapsize)", name, us);

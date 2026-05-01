@@ -29,15 +29,15 @@
 
 #if __KFBSD__ && defined(PT_SYSCALL) && defined(PT_LWPINFO) && defined(PL_FLAG_SCE) && defined(PL_FLAG_SCX)
 static bool bsd_syscall_hooks_suppressed(RDebug *dbg) {
-	return dbg && dbg->syscall_hook_suppress;
+	return dbg && dbg->options.syscall_hook_suppress;
 }
 
 static const char *bsd_syscall_hook_cmd(RDebug *dbg, const char *key) {
 	if (!strcmp (key, "cmd.syscall.enter")) {
-		return dbg? dbg->cmd_syscall_enter: NULL;
+		return dbg? dbg->options.cmd_syscall_enter: NULL;
 	}
 	if (!strcmp (key, "cmd.syscall.leave")) {
-		return dbg? dbg->cmd_syscall_leave: NULL;
+		return dbg? dbg->options.cmd_syscall_leave: NULL;
 	}
 	return NULL;
 }

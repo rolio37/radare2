@@ -2124,7 +2124,7 @@ static void cursor_nextrow(RCore *core, bool use_ocur) {
 		return;
 	}
 	if (PIDX == R_CORE_VISUAL_MODE_DB) {
-		const int cols = core->dbg->regcols;
+		const int cols = core->dbg->options.regcols;
 		int w = r_config_get_i (core->config, "hex.cols");
 		switch (core->seltab) {
 		case 0:
@@ -2218,7 +2218,7 @@ static void cursor_prevrow(RCore *core, bool use_ocur) {
 			return;
 		case 1:
 			{
-				const int cols = core->dbg->regcols;
+				const int cols = core->dbg->options.regcols;
 				p->cur -= cols > 0? cols: 4;
 				return;
 			}

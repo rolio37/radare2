@@ -5178,7 +5178,7 @@ static bool cmd_dcu(RCore *core, const char *input) {
 	} else {
 		bool honorbps = r_config_get_b (core->config, "dbg.bpforuntil");
 		ut64 addr = from;
-		if (!strcmp (core->dbg->btalgo, "trace") && core->dbg->arch
+		if (!strcmp (core->dbg->options.btalgo, "trace") && core->dbg->arch
 		    && !strcmp (core->dbg->arch, "x86") && core->dbg->bits == 4) {
 			unsigned long steps = 0;
 			long level = 0;
@@ -5256,20 +5256,20 @@ static bool cmd_dcu(RCore *core, const char *input) {
 		} else {
 			bool works = false;
 			if (r_config_get_b (core->config, "dbg.hwbp")) {
-				works = r_bp_add_hw (core->dbg->bp, addr, core->dbg->bpsize, R_BP_PROT_EXEC);
+				works = r_bp_add_hw (core->dbg->bp, addr, core->dbg->options.bpsize, R_BP_PROT_EXEC);
 			} else {
-				works = r_bp_add_sw (core->dbg->bp, addr, core->dbg->bpsize, R_BP_PROT_EXEC);
+				works = r_bp_add_sw (core->dbg->bp, addr, core->dbg->options.bpsize, R_BP_PROT_EXEC);
 			}
 			if (works) {
 				bpset = true;
 				// ok go on!
 			} else {
 				R_LOG_ERROR ("Cannot set breakpoint of size %d at 0x%08"PFMT64x,
-					core->dbg->bpsize, addr);
+					core->dbg->options.bpsize, addr);
 				return false;
 			}
 		}
-		R_LOG_INFO ("Continue until 0x%08"PFMT64x" using %d bpsize", addr, core->dbg->bpsize);
+		R_LOG_INFO ("Continue until 0x%08"PFMT64x" using %d bpsize", addr, core->dbg->options.bpsize);
 		r_reg_arena_swap (core->dbg->reg, true);
 
 		if (r_debug_is_dead (core->dbg)) {
@@ -5295,7 +5295,7 @@ static int cmd_debug_continue(RCore *core, const char *input) {
 		// This has been disabled as it caused `dc; dc; ood; dc` to
 		// hang on all binaries. TODO: Find the actual root cause and
 		// fix it.
-		core->dbg->continue_all_threads = true;
+		core->dbg->options.continue_all_threads = true;
 #endif
 		if (r_debug_is_dead (core->dbg)) {
 			R_LOG_ERROR ("Cannot continue, run ood?");

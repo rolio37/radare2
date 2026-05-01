@@ -217,8 +217,8 @@ static bool r_debug_native_syscall_hooks_enabled(RDebug *dbg) {
 	if (!dbg) {
 		return false;
 	}
-	return dbg->fasttime || R_STR_ISNOTEMPTY (dbg->cmd_syscall_enter)
-		|| R_STR_ISNOTEMPTY (dbg->cmd_syscall_leave);
+	return dbg->options.fasttime || R_STR_ISNOTEMPTY (dbg->options.cmd_syscall_enter)
+		|| R_STR_ISNOTEMPTY (dbg->options.cmd_syscall_leave);
 }
 #endif
 
@@ -237,10 +237,10 @@ static bool r_debug_native_continue(RDebug *dbg, int pid, int tid, int sig) {
 	}
 	RCore *core = dbg->coreb.core;
 	/* SIGINT handler for attached processes: dbg.consbreak (disabled by default) */
-	if (dbg->consbreak) {
+	if (dbg->options.consbreak) {
 		r_cons_break_push (core->cons, (RConsBreak)interrupt_process, dbg);
 	}
-	if (dbg->continue_all_threads && dbg->n_threads && dbg->threads) {
+	if (dbg->options.continue_all_threads && dbg->n_threads && dbg->threads) {
 		RDebugPid *th;
 		RListIter *it;
 		r_list_foreach (dbg->threads, it, th) {
@@ -280,8 +280,8 @@ static bool tracelib(RDebug *dbg, const char *mode, PLIB_ITEM item) {
 	int tmp = 0;
 	if (mode) {
 		switch (mode[0]) {
-		case 'l': needle = dbg->glob_libs; break;
-		case 'u': needle = dbg->glob_unlibs; break;
+		case 'l': needle = dbg->options.glob_libs; break;
+		case 'u': needle = dbg->options.glob_unlibs; break;
 		}
 	}
 	r_cons_printf (core->cons, "(%d) %sing library at 0x%p (%s) %s\n", item->pid, mode,

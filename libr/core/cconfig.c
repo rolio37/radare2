@@ -37,16 +37,16 @@ static bool cb_cmd_onsyscall(void *user, void *data) {
 static bool cb_cmd_syscall_enter(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	free (core->dbg->cmd_syscall_enter);
-	core->dbg->cmd_syscall_enter = strdup (node->value);
+	free (core->dbg->options.cmd_syscall_enter);
+	core->dbg->options.cmd_syscall_enter = strdup (node->value);
 	return true;
 }
 
 static bool cb_cmd_syscall_leave(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	free (core->dbg->cmd_syscall_leave);
-	core->dbg->cmd_syscall_leave = strdup (node->value);
+	free (core->dbg->options.cmd_syscall_leave);
+	core->dbg->options.cmd_syscall_leave = strdup (node->value);
 	return true;
 }
 
@@ -262,7 +262,7 @@ static inline void __setsegoff(RConfig *cfg, const char *asmarch, int asmbits) {
 static bool cb_debug_hitinfo(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->hitinfo = node->i_value;
+	core->dbg->options.hitinfo = node->i_value != 0;
 	return true;
 }
 
@@ -899,14 +899,14 @@ static bool cb_asmarch(void *user, void *data) {
 static bool cb_dbgbpsize(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->bpsize = node->i_value;
+	core->dbg->options.bpsize = node->i_value;
 	return true;
 }
 
 static bool cb_dbgbtdepth(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->btdepth = node->i_value;
+	core->dbg->options.btdepth = node->i_value;
 	return true;
 }
 
@@ -1952,15 +1952,15 @@ static bool cb_dbg_btalgo(void *user, void *data) {
 		print_node_options (user, node);
 		return false;
 	}
-	free (core->dbg->btalgo);
-	core->dbg->btalgo = strdup (node->value);
+	free (core->dbg->options.btalgo);
+	core->dbg->options.btalgo = strdup (node->value);
 	return true;
 }
 
 static bool cb_dbg_maxsnapsize(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->maxsnapsize = r_num_math (core->num, node->value);
+	core->dbg->options.maxsnapsize = r_num_math (core->num, node->value);
 	return true;
 }
 
@@ -1980,16 +1980,16 @@ static bool cb_dbg_wrap(void *user, void *data) {
 static bool cb_dbg_libs(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	free (core->dbg->glob_libs);
-	core->dbg->glob_libs = strdup (node->value);
+	free (core->dbg->options.glob_libs);
+	core->dbg->options.glob_libs = strdup (node->value);
 	return true;
 }
 
 static bool cb_dbg_unlibs(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	free (core->dbg->glob_unlibs);
-	core->dbg->glob_unlibs = strdup (node->value);
+	free (core->dbg->options.glob_unlibs);
+	core->dbg->options.glob_unlibs = strdup (node->value);
 	return true;
 }
 
@@ -2003,7 +2003,7 @@ static bool cb_dbg_bpinmaps(void *user, void *data) {
 static bool cb_dbg_forks(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->trace_forks = node->i_value;
+	core->dbg->options.trace_forks = node->i_value != 0;
 	if (r_config_get_b (core->config, "cfg.debug")) {
 		r_debug_attach (core->dbg, core->dbg->pid);
 	}
@@ -2041,7 +2041,7 @@ static bool cb_dbg_execs(void *user, void *data) {
 	RConfigNode *node = (RConfigNode *)data;
 #if __linux__
 	RCore *core = (RCore *)user;
-	core->dbg->trace_execs = node->i_value;
+	core->dbg->options.trace_execs = node->i_value != 0;
 	if (r_config_get_b (core->config, "cfg.debug")) {
 		r_debug_attach (core->dbg, core->dbg->pid);
 	}
@@ -2056,7 +2056,7 @@ static bool cb_dbg_execs(void *user, void *data) {
 static bool cb_dbg_clone(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->trace_clone = node->i_value;
+	core->dbg->options.trace_clone = node->i_value != 0;
 	if (r_config_get_b (core->config, "cfg.debug")) {
 		r_debug_attach (core->dbg, core->dbg->pid);
 	}
@@ -2066,21 +2066,21 @@ static bool cb_dbg_clone(void *user, void *data) {
 static bool cb_dbg_follow_child(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->follow_child = node->i_value;
+	core->dbg->options.follow_child = node->i_value != 0;
 	return true;
 }
 
 static bool cb_dbg_trace_continue(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->trace_continue = node->i_value;
+	core->dbg->options.trace_continue = node->i_value != 0;
 	return true;
 }
 
 static bool cb_dbg_aftersc(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->trace_aftersyscall = node->i_value;
+	core->dbg->options.trace_aftersyscall = node->i_value != 0;
 	if (r_config_get_b (core->config, "cfg.debug")) {
 		r_debug_attach (core->dbg, core->dbg->pid);
 	}
@@ -2090,7 +2090,7 @@ static bool cb_dbg_aftersc(void *user, void *data) {
 static bool cb_dbg_fasttime(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->fasttime = node->i_value;
+	core->dbg->options.fasttime = node->i_value != 0;
 	return true;
 }
 
@@ -2549,7 +2549,7 @@ static bool cb_hexcols(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	int c = R_MIN (1024, R_MAX (((RConfigNode *)data)->i_value, 0));
 	core->print->cols = c; // & ~1;
-	core->dbg->regcols = c / 4;
+	core->dbg->options.regcols = c / 4;
 	return true;
 }
 
@@ -2770,7 +2770,7 @@ static bool cb_scrcolumns(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	int n = atoi (node->value);
 	core->cons->force_columns = n;
-	core->dbg->regcols = n / 20;
+	core->dbg->options.regcols = n / 20;
 	return true;
 }
 
@@ -3083,7 +3083,7 @@ static bool cb_asm_addr_segment_bits(void *user, void *data) {
 static bool cb_stopthreads(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->stop_all_threads = node->i_value;
+	core->dbg->options.stop_all_threads = node->i_value != 0;
 	return true;
 }
 
@@ -3097,14 +3097,14 @@ static bool cb_scr_prompt_popup(void *user, void *data) {
 static bool cb_swstep(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->swstep = node->i_value;
+	core->dbg->options.swstep = node->i_value != 0;
 	return true;
 }
 
 static bool cb_consbreak(void *user, void *data) {
 	RCore *core = (RCore *)user;
 	RConfigNode *node = (RConfigNode *)data;
-	core->dbg->consbreak = node->i_value;
+	core->dbg->options.consbreak = node->i_value != 0;
 	return true;
 }
 
@@ -3420,7 +3420,7 @@ static bool cb_searchin(void *user, void *data) {
 
 static int __dbg_swstep_getter(void *user, RConfigNode *node) {
 	RCore *core = (RCore *)user;
-	node->i_value = core->dbg->swstep;
+	node->i_value = core->dbg->options.swstep;
 	return true;
 }
 
@@ -3750,7 +3750,7 @@ static bool cb_malloc(void *user, void *data) {
 			int i;
 			for (i = 0; valid[i]; i++) {
 				if (!strcmp (valid[i], nv)) {
-					core->dbg->malloc = data;
+					core->dbg->options.malloc = node->value;
 				}
 			}
 		}
@@ -3866,10 +3866,10 @@ static bool cb_dbg_verbose(void *user, void *data) {
 	switch (value[0]) {
 	case 't':
 	case 'T':
-		core->dbg->verbose = true;
+		core->dbg->options.verbose = true;
 		break;
 	default:
-		core->dbg->verbose = false;
+		core->dbg->options.verbose = false;
 		break;
 	}
 	return true;

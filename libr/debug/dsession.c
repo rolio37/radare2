@@ -41,7 +41,7 @@ static void reset_resume_state(RDebug *dbg) {
 	dbg->recoil_mode = R_DBG_RECOIL_NONE;
 	dbg->pc_at_bp = false;
 	dbg->pc_at_bp_set = false;
-	dbg->trace_continue = false;
+	dbg->options.trace_continue = false;
 	if (dbg->session) {
 		dbg->session->reasontype = R_DEBUG_REASON_NONE;
 		dbg->session->bp = NULL;

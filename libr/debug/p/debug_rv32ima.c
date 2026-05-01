@@ -64,7 +64,7 @@ static bool __rv32ima_step(RDebug *dbg) {
 }
 
 static bool __rv32ima_init(RDebug *dbg) {
-	dbg->swstep = false;
+	dbg->options.swstep = false;
 	dbg->tid = dbg->pid = 1;
 	// aeim
 	// aei
@@ -87,7 +87,7 @@ static RDebugReasonType __rv32ima_wait(RDebug *dbg, int pid) {
 }
 
 static bool __rv32ima_attach(RDebug *dbg, int pid) {
-	dbg->swstep = false;
+	dbg->options.swstep = false;
 	eprintf ("OK attach\n");
 	return true;
 #if 0
@@ -217,7 +217,7 @@ static bool __reg_read(RDebug *dbg, int type, ut8 *buf, int size) {
 	if (type != R_REG_TYPE_GPR || size < 1) {
 		return false;
 	}
-	dbg->swstep = false;
+	dbg->options.swstep = false;
 	int sz = sizeof (pd->rv32state.regs);
 	/* do nothing */
 	ut8 *bytes = r_reg_get_bytes (dbg->reg, type, &sz);

@@ -1500,7 +1500,7 @@ R_IPI bool linux_generate_corefile(RDebug *dbg, RBuffer *dest, bool fulldump) {
 		goto cleanup;
 	}
 	/* NT_FILE */
-	ut8 filter_flags = (dbg->coredump_filter != -1) ? dbg->coredump_filter : proc_data->per_process->coredump_filter;
+	ut8 filter_flags = (dbg->options.coredump_filter != -1) ? dbg->options.coredump_filter : proc_data->per_process->coredump_filter;
 	elf_proc_note->maps = linux_get_mapped_files (dbg, fulldump? 0: filter_flags);
 	if (!elf_proc_note->maps) {
 		R_LOG_ERROR ("linux_generate_corefile: linux_get_mapped_files failed");

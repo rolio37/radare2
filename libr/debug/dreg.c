@@ -123,7 +123,7 @@ R_API bool r_debug_reg_list(RDebug *dbg, int type, int size, PJ *pj, int rad, co
 		fmt = "%s = %s%s";
 		fmt2 = "%s%6s%s %s%s";
 		kwhites = "         ";
-		colwidth = dbg->regcols? 30: 25;
+		colwidth = dbg->options.regcols? 30: 25;
 		cols = 3;
 	} else {
 		fmt = "%s = %s%s";
@@ -132,8 +132,8 @@ R_API bool r_debug_reg_list(RDebug *dbg, int type, int size, PJ *pj, int rad, co
 		colwidth = 20;
 		cols = 4;
 	}
-	if (dbg->regcols) {
-		cols = dbg->regcols;
+	if (dbg->options.regcols) {
+		cols = dbg->options.regcols;
 	}
 	if (isJson) {
 		pj_o (pj);

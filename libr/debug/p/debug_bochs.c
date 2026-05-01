@@ -365,7 +365,7 @@ static bool r_debug_bochs_attach(RDebug *dbg, int pid) {
 
 	RIODesc *d = dbg->iob.io->desc;
 	//eprintf ("bochs_attach:\n");
-	dbg->swstep = false;
+	dbg->options.swstep = false;
 	if (d && d->plugin && d->plugin->meta.name && d->data) {
 		if (!strcmp ("bochs", d->plugin->meta.name)) {
 			RIOBochs *g = d->data;

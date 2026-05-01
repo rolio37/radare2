@@ -80,7 +80,7 @@ static bool r_debug_bp_hit(RDebug *dbg, RRegItem *pc_ri, ut64 pc, RBreakpointIte
 
 	/* if we are recoiling, tell r_debug_step that we ignored a breakpoint
 	 * event */
-	if (!dbg->swstep && dbg->recoil_mode != R_DBG_RECOIL_NONE) {
+	if (!dbg->options.swstep && dbg->recoil_mode != R_DBG_RECOIL_NONE) {
 		dbg->reason.bp_addr = 0;
 		return true;
 	}
@@ -93,10 +93,10 @@ static bool r_debug_bp_hit(RDebug *dbg, RRegItem *pc_ri, ut64 pc, RBreakpointIte
 		return true;
 	}
 # else
-	int pc_off = dbg->bpsize;
+	int pc_off = dbg->options.bpsize;
 	/* see if we really have a breakpoint here... */
 	if (!dbg->pc_at_bp_set) {
-		b = r_bp_get_at (dbg->bp, pc - dbg->bpsize);
+		b = r_bp_get_at (dbg->bp, pc - dbg->options.bpsize);
 		if (!b) { /* we don't. nothing left to do */
 			/* Some targets set pc to breakpoint */
 			b = r_bp_get_at (dbg->bp, pc);
@@ -128,14 +128,14 @@ static bool r_debug_bp_hit(RDebug *dbg, RRegItem *pc_ri, ut64 pc, RBreakpointIte
 		pc_off = 0;
 		b = r_bp_get_at (dbg->bp, pc);
 	} else {
-		b = r_bp_get_at (dbg->bp, pc - dbg->bpsize);
+		b = r_bp_get_at (dbg->bp, pc - dbg->options.bpsize);
 	}
 
 	if (!b) {
 		return true;
 	}
 
-	b = r_bp_get_at (dbg->bp, pc - dbg->bpsize);
+	b = r_bp_get_at (dbg->bp, pc - dbg->options.bpsize);
 	if (!b) { /* we don't. nothing left to do */
 		/* Some targets set pc to breakpoint */
 		b = r_bp_get_at (dbg->bp, pc);
@@ -170,7 +170,7 @@ static bool r_debug_bp_hit(RDebug *dbg, RRegItem *pc_ri, ut64 pc, RBreakpointIte
 	dbg->reason.bp_addr = b->addr;
 
 	/* inform the user of what happened */
-	if (dbg->hitinfo) {
+	if (dbg->options.hitinfo) {
 		R_LOG_DEBUG ("hit %spoint at: 0x%" PFMT64x,
 			b->trace ? "trace" : "break", pc);
 	}
@@ -220,7 +220,7 @@ static bool r_debug_recoil(RDebug *dbg, RDebugRecoilMode rc_mode) {
 		 * the second time it's called, the new sw breakpoint should exist
 		 * so we just restore all except what we originally hit and reset.
 		 */
-		if (dbg->swstep) {
+		if (dbg->options.swstep) {
 			if (!r_bp_restore_except (dbg->bp, true, dbg->reason.bp_addr)) {
 				return false;
 			}
@@ -350,6 +350,27 @@ static ut64 num_callback(RNum *userptr, const char *str, bool *ok) {
 	return r_debug_reg_get_err (dbg, str, ok, NULL);
 }
 
+static void r_debug_options_init(RDebugOptions *options) {
+	options->trace_forks = true;
+	options->trace_clone = false;
+	options->trace_aftersyscall = true;
+	options->follow_child = false;
+	options->trace_execs = false;
+	options->bpsize = 1;
+	options->swstep = false;
+	options->stop_all_threads = false;
+	options->coredump_filter = -1;
+	options->hitinfo = true;
+}
+
+static void r_debug_options_fini(RDebugOptions *options) {
+	free (options->btalgo);
+	free (options->cmd_syscall_enter);
+	free (options->cmd_syscall_leave);
+	free (options->glob_libs);
+	free (options->glob_unlibs);
+}
+
 R_API RDebug *r_debug_new(int hard) {
 	RDebug *dbg = R_NEW0 (RDebug);
 	if (!dbg) {
@@ -358,33 +379,24 @@ R_API RDebug *r_debug_new(int hard) {
 	// R_SYS_ARCH
 	dbg->arch = strdup (R_SYS_ARCH);
 	dbg->bits = R_SYS_BITS;
-	dbg->trace_forks = 1;
+	r_debug_options_init (&dbg->options);
 	dbg->forked_pid = -1;
 	dbg->main_pid = -1;
 	dbg->n_threads = 0;
-	dbg->trace_clone = 0;
 	dbg->egg = NULL; // r_egg_new ();
 	// r_egg_setup (dbg->egg, R_SYS_ARCH, R_SYS_BITS, R_SYS_ENDIAN, R_SYS_OS);
-	dbg->trace_aftersyscall = true;
-	dbg->follow_child = false;
-	R_FREE (dbg->btalgo);
-	dbg->trace_execs = 0;
 	dbg->anal = NULL;
 	dbg->pid = -1;
 	dbg->snaps = r_list_newf ((RListFree)r_debug_snap_free);
-	dbg->bpsize = 1;
 	dbg->tid = -1;
 	dbg->tree = r_tree_new ();
 	dbg->tracenodes = sdb_new0 ();
-	dbg->swstep = 0;
-	dbg->stop_all_threads = false;
 	dbg->trace = r_debug_trace_new ();
 	dbg->cb_printf = (void *)printf;
 	dbg->reg = r_reg_new ();
 	dbg->num = r_num_new (num_callback, str_callback, dbg);
 	dbg->current = NULL;
 	dbg->threads = NULL;
-	dbg->hitinfo = 1;
 	/* TODO: needs a redesign? */
 	dbg->maps = r_debug_map_list_new ();
 	dbg->maps_user = r_debug_map_list_new ();
@@ -394,7 +406,6 @@ R_API RDebug *r_debug_new(int hard) {
 	dbg->glibc_version_resolved = false;
 	dbg->glibc_version = 231; /* default version ubuntu 20 */
 	dbg->glibc_version_d = 0; /* no default glibc version */
-	dbg->coredump_filter = -1;
 	r_debug_signal_init (dbg);
 	if (hard) {
 		dbg->bp = r_bp_new ();
@@ -431,7 +442,7 @@ R_API void r_debug_free(RDebug *dbg) {
 		sdb_free (dbg->tracenodes);
 		r_debug_plugins_fini (dbg);
 		r_list_free (dbg->call_frames);
-		free (dbg->btalgo);
+		r_debug_options_fini (&dbg->options);
 		r_debug_signal_fini (dbg);
 		r_debug_trace_free (dbg->trace);
 		r_list_free (dbg->snaps);
@@ -441,10 +452,6 @@ R_API void r_debug_free(RDebug *dbg) {
 		// we dont own the egg now
 		// r_egg_free (dbg->egg);
 		free (dbg->arch);
-		free (dbg->cmd_syscall_enter);
-		free (dbg->cmd_syscall_leave);
-		free (dbg->glob_libs);
-		free (dbg->glob_unlibs);
 		free (dbg);
 	}
 }
@@ -567,7 +574,7 @@ R_API bool r_debug_execute(RDebug *dbg, const ut8 *buf, int len, R_OUT ut64 *ret
 	}
 #if USEBP
 	ut64 bp_addr = reg_pc + len;
-	r_bp_add_sw (dbg->bp, bp_addr, dbg->bpsize, R_BP_PROT_EXEC);
+	r_bp_add_sw (dbg->bp, bp_addr, dbg->options.bpsize, R_BP_PROT_EXEC);
 #endif
 	// ut64 v = r_reg_setv (dbg->reg, "PC", reg_pc);
 	dbg->iob.write_at (dbg->iob.io, reg_pc, buf, len);
@@ -774,7 +781,7 @@ R_API RDebugReasonType r_debug_wait(RDebug * R_NONNULL dbg, RBreakpointItem ** R
 		// Letting other threads running will cause ptrace commands to fail
 		// when writing to the same process memory to set/unset breakpoints
 		// and is problematic in Linux.
-		if (dbg->continue_all_threads) {
+		if (dbg->options.continue_all_threads) {
 			r_debug_stop (dbg);
 		}
 #endif
@@ -788,7 +795,7 @@ R_API RDebugReasonType r_debug_wait(RDebug * R_NONNULL dbg, RBreakpointItem ** R
 			return R_DEBUG_REASON_ERROR;
 		}
 
-		bool libs_bp = (dbg->glob_libs || dbg->glob_unlibs) ? true : false;
+		bool libs_bp = (dbg->options.glob_libs || dbg->options.glob_unlibs) ? true : false;
 		/* if the underlying stop reason is a breakpoint, call the handlers */
 		if (reason == R_DEBUG_REASON_BREAKPOINT ||
 			reason == R_DEBUG_REASON_STEP ||
@@ -937,7 +944,7 @@ R_API bool r_debug_step_soft(RDebug *dbg) {
 	}
 
 	for (i = 0; i < br; i++) {
-		RBreakpointItem *bpi = r_bp_add_sw (dbg->bp, next[i], dbg->bpsize, R_BP_PROT_EXEC);
+		RBreakpointItem *bpi = r_bp_add_sw (dbg->bp, next[i], dbg->options.bpsize, R_BP_PROT_EXEC);
 		if (bpi) {
 			bpi->swstep = true;
 		}
@@ -982,12 +989,12 @@ R_API bool r_debug_step_hard(RDebug *dbg, RBreakpointItem **pb) {
 #if __linux__
 	// Turn off continue_all_threads to make sure linux_dbg_wait
 	// only waits for one target for a single-step or breakpoint trap
-	bool prev_continue = dbg->continue_all_threads;
-	dbg->continue_all_threads = false;
+	bool prev_continue = dbg->options.continue_all_threads;
+	dbg->options.continue_all_threads = false;
 #endif
 	reason = r_debug_wait (dbg, pb);
 #if __linux__
-	dbg->continue_all_threads = prev_continue;
+	dbg->options.continue_all_threads = prev_continue;
 #endif
 
 	if (reason == R_DEBUG_REASON_DEAD || r_debug_is_dead (dbg)) {
@@ -1042,7 +1049,7 @@ R_API int r_debug_step(RDebug *dbg, int steps) {
 				R_LOG_ERROR ("trace_ins_before: failed");
 			}
 		}
-		if (dbg->swstep) {
+		if (dbg->options.swstep) {
 			ret = r_debug_step_soft (dbg);
 		} else {
 			ret = r_debug_step_hard (dbg, &bp);
@@ -1240,7 +1247,7 @@ repeat:
 	RDebugPlugin *plugin = R_UNWRAP3 (dbg, current, plugin);
 	RCore *core = dbg->coreb.core;
 	RCons *cons = core->cons;
-	if (dbg->session && dbg->trace_continue) {
+	if (dbg->session && dbg->options.trace_continue) {
 		while (!r_cons_is_breaked (cons)) {
 			if (r_debug_step (dbg, 1) != 1) {
 				break;
@@ -1289,7 +1296,7 @@ repeat:
 	}
 
 #if __linux__
-	if (reason == R_DEBUG_REASON_NEW_PID && dbg->follow_child) {
+	if (reason == R_DEBUG_REASON_NEW_PID && dbg->options.follow_child) {
 #if DEBUGGER
 		/// if the plugin is not compiled link fails, so better do runtime linking
 		/// until this code gets fixed
@@ -1306,7 +1313,7 @@ repeat:
 
 	if (reason == R_DEBUG_REASON_NEW_TID) {
 		ret = dbg->tid;
-		if (!dbg->trace_clone) {
+		if (!dbg->options.trace_clone) {
 			goto repeat;
 		}
 	}
@@ -1393,7 +1400,7 @@ repeat:
 	}
 
 	// Add a checkpoint at stops
-	if (dbg->session && !dbg->trace_continue) {
+	if (dbg->session && !dbg->options.trace_continue) {
 		dbg->session->cnum++;
 		dbg->session->maxcnum++;
 		r_debug_add_checkpoint (dbg);
@@ -1492,7 +1499,7 @@ static bool r_debug_continue_until_internal(RDebug *dbg, ut64 addr, bool block) 
 	// Check if there was another breakpoint set at addr
 	bool has_bp = r_bp_get_in (dbg->bp, addr, R_BP_PROT_EXEC);
 	if (!has_bp) {
-		r_bp_add_sw (dbg->bp, addr, dbg->bpsize, R_BP_PROT_EXEC);
+		r_bp_add_sw (dbg->bp, addr, dbg->options.bpsize, R_BP_PROT_EXEC);
 	}
 
 	// Continue until the bp is reached
@@ -1602,8 +1609,8 @@ static int show_syscall(RDebug *dbg, const char *sysreg) {
 }
 
 static bool debug_syscall_hook_suppress(RDebug *dbg, bool enable) {
-	const bool previous = dbg->syscall_hook_suppress;
-	dbg->syscall_hook_suppress = enable;
+	const bool previous = dbg->options.syscall_hook_suppress;
+	dbg->options.syscall_hook_suppress = enable;
 	return previous;
 }
 

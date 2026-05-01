@@ -4837,7 +4837,7 @@ static void direction_register_cb(void *user, int direction) {
 	RCore *core = (RCore *)user;
 	RPanels *panels = core->panels;
 	RPanel *cur = r_panels_get_cur_panel (panels);
-	int cols = core->dbg->regcols;
+	int cols = core->dbg->options.regcols;
 	cols = cols > 0 ? cols : 3;
 	cur->view->refresh = true;
 	switch (direction) {

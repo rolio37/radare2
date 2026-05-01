@@ -372,11 +372,38 @@ typedef struct r_debug_plugin_session_t {
 	void *plugin_data;
 } RDebugPluginSession;
 
+typedef struct r_debug_options_t {
+	const char *malloc; // borrowed from dbg.malloc config
+	int bpsize; /* size of a breakpoint */
+	char *btalgo; /* select backtrace algorithm */
+	int btdepth; /* backtrace depth */
+	int regcols; /* display columns */
+	bool swstep; /* steps with software traps */
+	bool stop_all_threads; /* stop all threads at any stop */
+	bool trace_forks; /* stop on new children */
+	bool trace_execs; /* stop on new execs */
+	bool trace_aftersyscall; /* stop after the syscall (before if disabled) */
+	bool trace_clone; /* stop on new threads */
+	bool fasttime; /* skip timer syscalls while continuing */
+	bool syscall_hook_suppress; /* suppress command hooks while dcs owns syscall stops */
+	bool follow_child; /* On fork, trace the child */
+	char *cmd_syscall_enter; /* command to run before syscall execution */
+	char *cmd_syscall_leave; /* command to run after syscall execution */
+	char *glob_libs; /* stop on lib load */
+	char *glob_unlibs; /* stop on lib unload */
+	bool consbreak; /* SIGINT handle for attached processes */
+	bool continue_all_threads;
+	int coredump_filter; /* override coredump filter, -1 to use default */
+	bool trace_continue;
+	size_t maxsnapsize;
+	bool verbose;
+	bool hitinfo;
+} RDebugOptions;
+
 typedef struct r_debug_t {
 	// R2_600 use RArchConfig instead?
 	char *arch;
 	int bits; // only 16, 32, 64, .. not packed
-	int hitinfo;
 
 	int main_pid;
 	int pid; /* selected process id */
@@ -385,31 +412,10 @@ typedef struct r_debug_t {
 	int n_threads;
 	RList *threads; // NOTE: list contents are platform-specific
 
-	char *malloc; // choose malloc parser: 0 = glibc, 1 = jemalloc
-
 	/* dbg.* config options (see e?dbg)
 	 * NOTE: some settings are checked inline instead of tracked here.
 	 */
-	int bpsize; /* size of a breakpoint */
-	char *btalgo; /* select backtrace algorithm */
-	int btdepth; /* backtrace depth */
-	int regcols; /* display columns */
-	int swstep; /* steps with software traps */
-	int stop_all_threads; /* stop all threads at any stop */
-	int trace_forks; /* stop on new children */
-	int trace_execs; /* stop on new execs */
-	int trace_aftersyscall; /* stop after the syscall (before if disabled) */
-	int trace_clone; /* stop on new threads */
-	bool fasttime; /* skip timer syscalls while continuing */
-	bool syscall_hook_suppress; /* suppress command hooks while dcs owns syscall stops */
-	int follow_child; /* On fork, trace the child */
-	char *cmd_syscall_enter; /* command to run before syscall execution */
-	char *cmd_syscall_leave; /* command to run after syscall execution */
-	char *glob_libs; /* stop on lib load */
-	char *glob_unlibs; /* stop on lib unload */
-	bool consbreak; /* SIGINT handle for attached processes */
-	bool continue_all_threads;
-	int coredump_filter; /* override coredump filter, -1 to use default */
+	RDebugOptions options;
 
 	/* tracking debugger state */
 	int steps; /* counter of steps done */
@@ -448,7 +454,6 @@ typedef struct r_debug_t {
 	RList *maps_user; // <RDebugMap>
 	RList *snaps; // <RDebugSnap> -- user defined snapshots
 
-	bool trace_continue;
 	RAnalOp *cur_op;
 	RDebugSession *session;
 
@@ -460,8 +465,6 @@ typedef struct r_debug_t {
 	int _mode;
 	RNum *num;
 	REgg *egg;
-	bool verbose;
-	size_t maxsnapsize;
 	bool main_arena_resolved; /* is the main_arena resolved already? */
 	bool glibc_version_resolved; /* is the libc version resolved already? */
 	int glibc_version;

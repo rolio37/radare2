@@ -201,7 +201,7 @@ static bool r_debug_qnx_stop(RDebug *dbg) {
 
 static bool r_debug_qnx_attach(RDebug *dbg, int pid) {
 	RIODesc *d = dbg->iob.io->desc;
-	dbg->swstep = false;
+	dbg->options.swstep = false;
 
 	PluginData *pd = R_UNWRAP3 (dbg, current, plugin_data);
 	if (!pd) {

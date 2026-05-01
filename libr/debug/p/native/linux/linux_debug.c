@@ -105,26 +105,26 @@ static bool syscall_resume(RDebug *dbg, int tid, bool trace_syscalls) {
 }
 
 static bool syscall_fasttime_enabled(RDebug *dbg) {
-	return dbg && dbg->fasttime;
+	return dbg && dbg->options.fasttime;
 }
 
 static const char *syscall_hook_cmd(RDebug *dbg, const char *key) {
 	if (!strcmp (key, "cmd.syscall.enter")) {
-		return dbg? dbg->cmd_syscall_enter: NULL;
+		return dbg? dbg->options.cmd_syscall_enter: NULL;
 	}
 	if (!strcmp (key, "cmd.syscall.leave")) {
-		return dbg? dbg->cmd_syscall_leave: NULL;
+		return dbg? dbg->options.cmd_syscall_leave: NULL;
 	}
 	return NULL;
 }
 
 static bool syscall_hooks_suppressed(RDebug *dbg) {
-	return dbg && dbg->syscall_hook_suppress;
+	return dbg && dbg->options.syscall_hook_suppress;
 }
 
 static bool syscall_hooks_enabled(RDebug *dbg) {
-	return syscall_fasttime_enabled (dbg) || R_STR_ISNOTEMPTY (dbg->cmd_syscall_enter)
-		|| R_STR_ISNOTEMPTY (dbg->cmd_syscall_leave);
+	return syscall_fasttime_enabled (dbg) || R_STR_ISNOTEMPTY (dbg->options.cmd_syscall_enter)
+		|| R_STR_ISNOTEMPTY (dbg->options.cmd_syscall_leave);
 }
 
 static bool syscall_is_timer(RDebug *dbg, int syscall_num) {
@@ -260,9 +260,9 @@ int linux_handle_signals(RDebug *dbg, int tid) {
 			break;
 		case SIGTRAP:
 		{
-			if (dbg->glob_libs || dbg->glob_unlibs) {
+			if (dbg->options.glob_libs || dbg->options.glob_unlibs) {
 				ut64 pc_addr = r_debug_reg_get (dbg, "PC");
-				RBreakpointItem *b = r_bp_get_at (dbg->bp, pc_addr - dbg->bpsize);
+				RBreakpointItem *b = r_bp_get_at (dbg->bp, pc_addr - dbg->options.bpsize);
 				if (b && b->internal) {
 					char *p = strstr (b->data, "dbg.");
 					if (p) {
@@ -388,7 +388,7 @@ RDebugReasonType linux_ptrace_event (RDebug *dbg, int ptid, int status, bool dow
 		}
 
 		linux_add_new_thread (dbg, (int)data);
-		if (dbg->trace_clone) {
+		if (dbg->options.trace_clone) {
 			r_debug_select (dbg, dbg->pid, (int)data);
 		}
 		eprintf ("(%d) Created thread %d\n", ptid, (int)data);
@@ -409,7 +409,7 @@ RDebugReasonType linux_ptrace_event (RDebug *dbg, int ptid, int status, bool dow
 			}
 		}
 		eprintf ("(%d) Created process %d\n", ptid, (int)data);
-		if (!dbg->trace_forks) {
+		if (!dbg->options.trace_forks) {
 			// We need to do this even if the new process will be detached since the
 			// breakpoints are inherited from the parent
 			linux_remove_fork_bps (dbg);
@@ -424,7 +424,7 @@ RDebugReasonType linux_ptrace_event (RDebug *dbg, int ptid, int status, bool dow
 			r_sys_perror ("ptrace GETEVENTMSG");
 			return R_DEBUG_REASON_ERROR;
 		}
-		//TODO: Check other processes exit if dbg->trace_forks is on
+		//TODO: Check other processes exit if dbg->options.trace_forks is on
 		if (ptid != dbg->pid) {
 			eprintf ("(%d) Thread exited with status=0x%"PFMT64x"\n", ptid, (ut64)data);
 			return R_DEBUG_REASON_EXIT_TID;
@@ -504,13 +504,13 @@ bool linux_set_options(RDebug *dbg, int pid) {
 	traceflags |= PTRACE_O_TRACEFORK;
 	traceflags |= PTRACE_O_TRACEVFORK;
 	traceflags |= PTRACE_O_TRACECLONE;
-	if (dbg->trace_forks) {
+	if (dbg->options.trace_forks) {
 		traceflags |= PTRACE_O_TRACEVFORKDONE;
 	}
-	if (dbg->trace_execs) {
+	if (dbg->options.trace_execs) {
 		traceflags |= PTRACE_O_TRACEEXEC;
 	}
-	if (dbg->trace_aftersyscall) {
+	if (dbg->options.trace_aftersyscall) {
 		traceflags |= PTRACE_O_TRACEEXIT;
 	}
 	/* SIGTRAP | 0x80 on signal handler .. not supported on all archs */
@@ -641,7 +641,7 @@ RDebugReasonType linux_dbg_wait(RDebug *dbg, int pid) {
 			r_cons_break_push (core->cons, (RConsBreak)linux_dbg_wait_break, dbg);
 		}
 		void *bed = r_cons_sleep_begin (core->cons);
-		if (dbg->continue_all_threads) {
+		if (dbg->options.continue_all_threads) {
 			ret = waitpid (-1, &status, flags);
 		} else {
 			ret = waitpid (pid, &status, flags);
@@ -1559,7 +1559,7 @@ bool linux_reg_read(RDebug *dbg, int type, ut8 *buf, int size) {
 			// ignore ENODEV, it just means this CPU or kernel doesn't support XSTATE
 			ret = 0;
 		} else if (ret != 0) {
-			if (dbg->verbose) {
+			if (dbg->options.verbose) {
 				// WSL1 doesnt support retrieving YMM registers, so this call just fails, no need to be noisy
 				r_sys_perror ("PTRACE_GETREGSET");
 			}
