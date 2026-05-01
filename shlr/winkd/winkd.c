@@ -173,6 +173,20 @@ void winkd_ctx_free(WindCtx **ctx) {
 #define PKT_REQ(p) ((kd_req_t *) (((kd_packet_t *)p)->data))
 #define PKT_STC(p) ((kd_stc_64 *) (((kd_packet_t *)p)->data))
 
+static int winkd_copy_read_mem_response(uint8_t *buf, int count, kd_packet_t *pkt) {
+	kd_req_t *rr = PKT_REQ (pkt);
+	if (rr->ret) {
+		return 0;
+	}
+	ut32 avail = pkt->length >= sizeof (kd_req_t) ? (ut32)(pkt->length - sizeof (kd_req_t)) : 0;
+	ut32 wire = R_MIN (rr->r_mem.read, avail);
+	int ret = (count > 0) ? (int)R_MIN ((ut32)count, wire) : 0;
+	if (ret > 0) {
+		memcpy (buf, rr->data, ret);
+	}
+	return ret;
+}
+
 #if 0
 static void dump_stc(kd_packet_t *p) {
 	kd_stc_64 *stc = PKT_STC (p);
@@ -1258,8 +1272,7 @@ error:
 int winkd_read_at_phys(WindCtx *ctx, uint8_t *buf, const ut64 offset, const int count) {
 	kd_req_t req = {
 		0
-	},
-		*rr;
+	};
 	kd_packet_t *pkt;
 	int ret;
 
@@ -1295,16 +1308,7 @@ int winkd_read_at_phys(WindCtx *ctx, uint8_t *buf, const ut64 offset, const int 
 
 	winkd_lock_leave (ctx);
 
-	rr = PKT_REQ (pkt);
-
-	if (rr->ret) {
-		free (pkt);
-		return 0;
-	}
-
-	int avail = pkt->length >= sizeof (kd_req_t) ? (int)(pkt->length - sizeof (kd_req_t)) : 0;
-	ret = R_MIN (count, R_MIN ((int)rr->r_mem.read, avail));
-	memcpy (buf, rr->data, ret);
+	ret = winkd_copy_read_mem_response (buf, count, pkt);
 	free (pkt);
 	return ret;
 error:
@@ -1313,7 +1317,7 @@ error:
 }
 
 static int read_at_virt_once(WindCtx *ctx, uint8_t *buf, ut64 offset, int count) {
-	kd_req_t *rr, req = { 0 };
+	kd_req_t req = { 0 };
 	kd_packet_t *pkt;
 	int ret;
 
@@ -1345,16 +1349,7 @@ static int read_at_virt_once(WindCtx *ctx, uint8_t *buf, ut64 offset, int count)
 
 	winkd_lock_leave (ctx);
 
-	rr = PKT_REQ (pkt);
-
-	if (rr->ret) {
-		free (pkt);
-		return 0;
-	}
-
-	int avail = pkt->length >= sizeof (kd_req_t) ? (int)(pkt->length - sizeof (kd_req_t)) : 0;
-	ret = R_MIN (count, R_MIN ((int)rr->r_mem.read, avail));
-	memcpy (buf, rr->data, ret);
+	ret = winkd_copy_read_mem_response (buf, count, pkt);
 	free (pkt);
 	return ret;
 error:
