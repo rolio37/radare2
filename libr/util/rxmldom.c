@@ -159,7 +159,7 @@ R_API ut64 rxml_dom_attr_ullong(const RXmlNode *node, const char *key, ut64 def)
 
 R_API int rxml_dom_attr_int(const RXmlNode *node, const char *key, int def) {
 	const char *v = rxml_dom_get_attribute (node, key);
-	return v ? atoi (v) : def;
+	return v ? (int) strtol (v, NULL, 0) : def;
 }
 
 R_API ut32 rxml_dom_attr_uint(const RXmlNode *node, const char *key, ut32 def) {

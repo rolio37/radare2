@@ -106,7 +106,7 @@ static RXmlRet r_xml_pushstack(RXml *x, char **res, unsigned ch) {
 }
 
 static RXmlRet r_xml_pushstackc(RXml *x, unsigned ch) {
-	if (x->stacklen + 1 >= x->stacksize) {
+	if (x->stacklen + 2 >= x->stacksize) {
 		return R_XML_ESTACK;
 	}
 	x->stack[x->stacklen] = ch;
@@ -196,14 +196,21 @@ static RXmlRet r_xml_ref(RXml *x, unsigned ch) {
 
 static RXmlRet r_xml_refend(RXml *x, RXmlRet ret) {
 	const char *r = x->data;
-	unsigned ch = 0;
+	ut64 ch = 0;
 	if (*r == '#') {
 		if (r[1] == 'x') {
 			for (r += 2; r_xml_isHex ((ut8)*r); r++) {
-				ch = (ch << 4) + (*r <= '9'? *r - '0': (*r | 32) - 'a' + 10);
+				ut64 byte = (*r <= '9')? *r - '0': (*r | 32) - 'a' + 10;
+				if ((ch >> 60)) {
+					return R_XML_EREF;
+				}
+				ch = (ch << 4) + byte;
 			}
 		} else {
 			for (r++; R_XML_IS_NUM ((ut8)*r); r++) {
+				if (ch > (UT64_MAX - 9) / 10) {
+					return R_XML_EREF;
+				}
 				ch = (ch * 10) + (*r - '0');
 			}
 		}
@@ -222,8 +229,7 @@ static RXmlRet r_xml_refend(RXml *x, RXmlRet ret) {
 		ch = '"';
 	}
 
-	/* Codepoints not allowed in the XML 1.1 definition of a Char */
-	if (!ch || ch > 0x10FFFF || ch == 0xFFFE || ch == 0xFFFF || (ch >= 0xD800 && ch <= 0xDFFF)) {
+	if (!ch || ch > 0x10FFFF || ch == 0xFFFE || ch == 0xFFFF) {
 		return R_XML_EREF;
 	}
 	r_xml_setutf8 (x->data, ch);
@@ -361,7 +367,7 @@ SP_CASES:
 	case R_XML_STATE_CD1:
 		if (ch == ']') {
 			x->state = R_XML_STATE_CD2;
-			return R_XML_OK;
+			return r_xml_datacontent (x, ch);
 		}
 		x->state = R_XML_STATE_CD0;
 		return r_xml_datacd1 (x, ch);
