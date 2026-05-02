@@ -667,7 +667,7 @@ R_DEPRECATE typedef struct r_anal_var_field_t {
 // Use r_anal_get_functions_in¿() instead
 R_DEPRECATE R_API RAnalFunction *r_anal_get_fcn_in(RAnal *anal, ut64 addr, int type);
 R_DEPRECATE R_API RAnalFunction *r_anal_get_fcn_in_bounds(RAnal *anal, ut64 addr, int type);
-R_API R_DEPRECATE RList/*<RAnalVar *>*/ *r_anal_var_all_list(RAnal *anal, RAnalFunction *fcn);
+R_API R_OWNED RVecAnalVarPtr/*<RAnalVar *>*/ *r_anal_function_vars(RAnal *anal, RAnalFunction *fcn);
 R_API R_DEPRECATE RList/*<RAnalVarField *>*/ *r_anal_function_get_var_fields(RAnalFunction *fcn, int kind);
 // There could be multiple vars used in multiple functions. Use r_anal_get_functions_in()+r_anal_function_get_vars_used_at() instead.
 R_API R_DEPRECATE RAnalVar *r_anal_get_used_function_var(RAnal *anal, ut64 addr);
@@ -1358,10 +1358,17 @@ R_API void r_anal_extract_rarg(RAnal *anal, RAnalOp *op, RAnalFunction *fcn, int
 R_API RAnalVar *r_anal_var_get_dst_var(RAnalVar *var);
 
 typedef struct r_anal_function_vars_cache {
-	RList *bvars;
-	RList *rvars;
-	RList *svars;
+	RVecAnalVarPtr *bvars;
+	RVecAnalVarPtr *rvars;
+	RVecAnalVarPtr *svars;
 } RAnalFcnVarsCache;
+
+// Iterates rvars, then bvars, then svars in a vars cache. Caller declares
+// `it` as `RAnalVar **`. `break` only exits the current vec; use a flag to
+// terminate early across all kinds.
+#define R_VEC_FOREACH_VARS_CACHE(cache, it) \
+	for (RVecAnalVarPtr *const *_vc_p = (RVecAnalVarPtr *const[]){(cache)->rvars, (cache)->bvars, (cache)->svars}, *const *_vc_e = _vc_p + 3; _vc_p < _vc_e; _vc_p++) \
+		R_VEC_FOREACH (*_vc_p, it)
 
 R_API void r_anal_function_vars_cache_init(RAnal *anal, RAnalFcnVarsCache *cache, RAnalFunction *fcn);
 R_API void r_anal_function_vars_cache_fini(RAnalFcnVarsCache *cache);
@@ -1422,7 +1429,7 @@ R_API RAnalRefStr *r_anal_reflines_str(void *core, ut64 addr, int opts);
 R_API void r_anal_reflines_str_free(RAnalRefStr *refstr);
 /* TODO move to r_core */
 R_API void r_anal_var_list_show(RAnal *anal, RAnalFunction *fcn, int kind, int mode, PJ* pj);
-R_API RList *r_anal_var_list(RAnal *anal, RAnalFunction *fcn, int kind);
+R_API R_OWNED RVecAnalVarPtr *r_anal_var_vec(RAnal *anal, RAnalFunction *fcn, int kind);
 
 // calling conventions API
 R_API bool r_anal_cc_exist(RAnal *anal, const char *convention);

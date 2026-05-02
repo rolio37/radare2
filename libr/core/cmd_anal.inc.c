@@ -1332,55 +1332,52 @@ static ut64 faddr(RCore *core, ut64 addr, bool *nr) {
 static void __add_vars_sdb(RCore *core, RAnalFunction *fcn) {
 	RAnalFcnVarsCache cache;
 	r_anal_function_vars_cache_init (core->anal, &cache, fcn);
-	RListIter *iter;
-	RAnalVar *var;
 	size_t arg_count = 0;
-
-	RList *all_vars = cache.rvars;
-	r_list_join (all_vars, cache.bvars);
-	r_list_join (all_vars, cache.svars);
-	r_list_foreach (all_vars, iter, var) {
-		if (var->isarg) {
-			char *k = r_str_newf ("func.%s.arg.%d", fcn->name, (int)arg_count);
-			const char *o = sdb_const_get (core->anal->sdb_types, k, 0);
-			char *comma = o? strchr (o, ','): NULL;
-			char *db_type = comma? r_str_ndup (o, comma - o): NULL;
-			char *db_name = comma? strdup (comma + 1): NULL;
-			if (!strstr (var->name, "arg_") || (o && strstr (o, ",arg_"))) {
-				char *type = db_type && strstr (var->type, "arg_")? db_type: var->type;
-				char *v = r_str_newf ("%s,%s", type, var->name);
-				sdb_set (core->anal->sdb_types, k, v, 0);
-				free (v);
-			} else {
-				char *name = db_name? db_name: var->name;
-				char *type = strdup (db_type? db_type: var->type);
-				// eprintf ("VARTYPE1 %s %s %c", var->type,db_type, 10);
-				if (var->name && !strstr (var->name, "arg_")) {
-					o = NULL;
-				}
-				char *v = comma? strdup (o): r_str_newf ("%s,%s", type, name);
-				/// eprintf("arg (%s) %s -- %s%c", k, v, var->name, 10);
-				char *s = strdup (name);
-				if (o) {
-					if (!strstr (var->name, ",arg_")) {
-						free (var->name);
-						var->name = s;
-					} else {
-						free (s);
-					}
-				} else {
+	RAnalVar **it;
+	R_VEC_FOREACH_VARS_CACHE (&cache, it) {
+		RAnalVar *var = *it;
+		if (!var->isarg) {
+			continue;
+		}
+		char *k = r_str_newf ("func.%s.arg.%d", fcn->name, (int)arg_count);
+		const char *o = sdb_const_get (core->anal->sdb_types, k, 0);
+		char *comma = o? strchr (o, ','): NULL;
+		char *db_type = comma? r_str_ndup (o, comma - o): NULL;
+		char *db_name = comma? strdup (comma + 1): NULL;
+		if (!strstr (var->name, "arg_") || (o && strstr (o, ",arg_"))) {
+			char *type = db_type && strstr (var->type, "arg_")? db_type: var->type;
+			char *v = r_str_newf ("%s,%s", type, var->name);
+			sdb_set (core->anal->sdb_types, k, v, 0);
+			free (v);
+		} else {
+			char *name = db_name? db_name: var->name;
+			char *type = strdup (db_type? db_type: var->type);
+			// eprintf ("VARTYPE1 %s %s %c", var->type,db_type, 10);
+			if (var->name && !strstr (var->name, "arg_")) {
+				o = NULL;
+			}
+			char *v = comma? strdup (o): r_str_newf ("%s,%s", type, name);
+			/// eprintf("arg (%s) %s -- %s%c", k, v, var->name, 10);
+			char *s = strdup (name);
+			if (o) {
+				if (!strstr (var->name, ",arg_")) {
 					free (var->name);
 					var->name = s;
-					sdb_set (core->anal->sdb_types, k, v, 0);
+				} else {
+					free (s);
 				}
-				free (v);
-				free (type);
+			} else {
+				free (var->name);
+				var->name = s;
+				sdb_set (core->anal->sdb_types, k, v, 0);
 			}
-			free (db_name);
-			free (db_type);
-			free (k);
-			arg_count++;
+			free (v);
+			free (type);
 		}
+		free (db_name);
+		free (db_type);
+		free (k);
+		arg_count++;
 	}
 	//	sdb_num_set (core->anal->sdb_types, args, (int)arg_count, 0);
 	if (arg_count > 0) {
@@ -1602,11 +1599,12 @@ static void var_accesses_list(RCore *core, RAnalFunction *fcn, RAnalVar *var, PJ
 
 static void list_vars(RCore *core, RAnalFunction *fcn, PJ *pj, int type, const char *name) {
 	RAnalVar *var = NULL;
-	RListIter *iter;
-	RList *list = r_anal_var_all_list (core->anal, fcn);
+	RVecAnalVarPtr *vars = r_anal_function_vars (core->anal, fcn);
+	RAnalVar **it;
 	if (type == '=') {
 		ut64 oaddr = core->addr;
-		r_list_foreach (list, iter, var) {
+		R_VEC_FOREACH (vars, it) {
+			var = *it;
 			r_cons_printf (core->cons, "* %s\n", var->name);
 			RAnalVarAccess *acc;
 			R_VEC_FOREACH (&var->accesses, acc) {
@@ -1627,11 +1625,12 @@ static void list_vars(RCore *core, RAnalFunction *fcn, PJ *pj, int type, const c
 			}
 		}
 		r_core_seek (core, oaddr, 0);
-		r_list_free (list);
+		RVecAnalVarPtr_free (vars);
 		return;
 	}
 	if (type == '*') {
-		r_list_foreach (list, iter, var) {
+		R_VEC_FOREACH (vars, it) {
+			var = *it;
 			char *sname = r_name_filter_dup (var->name);
 			char *stype = r_str_sanitize_r2 (var->type);
 			if (sname && stype) {
@@ -1652,13 +1651,14 @@ static void list_vars(RCore *core, RAnalFunction *fcn, PJ *pj, int type, const c
 			free (sname);
 			free (stype);
 		}
-		r_list_free (list);
+		RVecAnalVarPtr_free (vars);
 		return;
 	}
 	if (type == 'd') {
 		const char *bp = r_reg_alias_getname (core->anal->reg, R_REG_ALIAS_BP);
 		r_cons_printf (core->cons, "f-fcnvar*\n");
-		r_list_foreach (list, iter, var) {
+		R_VEC_FOREACH (vars, it) {
+			var = *it;
 			char *fname = r_name_filter_dup (var->name);
 			if (fname) {
 				r_cons_printf (core->cons, "'@%s%s%d'f fcnvar.%s\n",
@@ -1666,11 +1666,11 @@ static void list_vars(RCore *core, RAnalFunction *fcn, PJ *pj, int type, const c
 				free (fname);
 			}
 		}
-		r_list_free (list);
+		RVecAnalVarPtr_free (vars);
 		return;
 	}
 	if (type != 'W' && type != 'R') {
-		r_list_free (list);
+		RVecAnalVarPtr_free (vars);
 		return;
 	}
 	int access_type = type == 'R' ? R_PERM_R : R_PERM_W;
@@ -1683,14 +1683,15 @@ static void list_vars(RCore *core, RAnalFunction *fcn, PJ *pj, int type, const c
 			var_accesses_list (core, fcn, var, pj, access_type, var->name);
 		}
 	} else {
-		r_list_foreach (list, iter, var) {
+		R_VEC_FOREACH (vars, it) {
+			var = *it;
 			var_accesses_list (core, fcn, var, pj, access_type, var->name);
 		}
 	}
 	if (pj) {
 		pj_end (pj);
 	}
-	r_list_free (list);
+	RVecAnalVarPtr_free (vars);
 }
 
 static void cmd_afvx(RCore *core, RAnalFunction *fcn, bool json) {
@@ -1870,28 +1871,40 @@ static int delta_cmp(const void *a, const void *b) {
 	return vb->delta - va->delta;
 }
 
+static int delta_ptr_cmp(RAnalVar * const *a, RAnalVar * const *b) {
+	return delta_cmp (*a, *b);
+}
+
 static int delta_cmp2(const void *a, const void *b) {
 	const RAnalVar *va = a;
 	const RAnalVar *vb = b;
 	return va->delta - vb->delta;
 }
 
+static int delta_ptr_cmp2(RAnalVar * const *a, RAnalVar * const *b) {
+	return delta_cmp2 (*a, *b);
+}
+
 static void __cmd_afvf(RCore *core, const char *input) {
 	char padstr[12];
 	RAnalFunction *fcn = r_anal_get_fcn_in (core->anal, core->addr, -1);
-	RListIter *iter;
-	RAnalVar *p;
-	RList *list = r_anal_var_all_list (core->anal, fcn);
-	r_list_sort (list, delta_cmp2);
-	r_list_foreach (list, iter, p) {
+	if (!fcn) {
+		return;
+	}
+	RVecAnalVarPtr *vars = r_anal_function_vars (core->anal, fcn);
+	RVecAnalVarPtr_sort (vars, delta_ptr_cmp2);
+	RAnalVar **it;
+	R_VEC_FOREACH (vars, it) {
+		RAnalVar *p = *it;
 		if (p->isarg || p->delta > 0) {
 			continue;
 		}
 		const char *pad = r_str_pad (padstr, sizeof (padstr), ' ', 10 - strlen (p->name));
 		r_cons_printf (core->cons, "0x%08"PFMT64x"  %s:%s%s\n", (ut64)-p->delta, p->name, pad, p->type);
 	}
-	r_list_sort (list, delta_cmp);
-	r_list_foreach (list, iter, p) {
+	RVecAnalVarPtr_sort (vars, delta_ptr_cmp);
+	R_VEC_FOREACH (vars, it) {
+		RAnalVar *p = *it;
 		if (!p->isarg && p->delta < 0) {
 			continue;
 		}
@@ -1900,7 +1913,7 @@ static void __cmd_afvf(RCore *core, const char *input) {
 		// XXX this 0x6a is a hack
 		r_cons_printf (core->cons, "0x%08"PFMT64x"  %s:%s%s\n", ((ut64)p->delta) - 0x6a, p->name, pad, p->type);
 	}
-	r_list_free (list);
+	RVecAnalVarPtr_free (vars);
 
 }
 
@@ -2087,13 +2100,14 @@ static int cmd_afv(RCore *core, const char *str) {
 			r_anal_op_free (op);
 			free (ostr);
 		} else {
-			RListIter *iter;
-			RAnalVar *v;
-			RList *list = r_anal_var_all_list (core->anal, fcn);
-			r_list_foreach (list, iter, v) {
+			RVecAnalVarPtr *vars = r_anal_function_vars (core->anal, fcn);
+			RAnalVar **it;
+			R_VEC_FOREACH (vars, it) {
+				RAnalVar *v = *it;
 				r_cons_printf (core->cons, "%s\n", v->name);
 			}
-			r_list_free (list);
+			RVecAnalVarPtr_free (vars);
+			free (ostr);
 		}
 		return true;
 	case 'd': // "afvd"
@@ -2115,10 +2129,10 @@ static int cmd_afv(RCore *core, const char *str) {
 			}
 			r_anal_var_display (core->anal, v1);
 		} else {
-			RListIter *iter;
-			RAnalVar *p;
-			RList *list = r_anal_var_all_list (core->anal, fcn);
-			r_list_foreach (list, iter, p) {
+			RVecAnalVarPtr *vars = r_anal_function_vars (core->anal, fcn);
+			RAnalVar **it;
+			R_VEC_FOREACH (vars, it) {
+				RAnalVar *p = *it;
 				char *a = core_varvalue (core, p->name);
 				if ((a && !*a) || !a) {
 					free (a);
@@ -2127,7 +2141,7 @@ static int cmd_afv(RCore *core, const char *str) {
 				r_cons_printf (core->cons, "%s %s = %s", p->isarg? "arg": "var", p->name, a);
 				free (a);
 			}
-			r_list_free (list);
+			RVecAnalVarPtr_free (vars);
 		}
 		free (ostr);
 		return true;
@@ -4429,15 +4443,17 @@ static void cmd_anal_fcn_sig(RCore *core, const char *input) {
 			RAnalFcnVarsCache cache;
 			r_anal_function_vars_cache_init (core->anal, &cache, fcn);
 			int nargs = 0;
-			RAnalVar *var;
-			r_list_foreach (cache.rvars, iter, var) {
+			RAnalVar **vit;
+			R_VEC_FOREACH (cache.rvars, vit) {
+				RAnalVar *var = *vit;
 				nargs++;
 				pj_o (j);
 				pj_ks (j, "name", var->name);
 				pj_ks (j, "type", var->type);
 				pj_end (j);
 			}
-			r_list_foreach (cache.bvars, iter, var) {
+			R_VEC_FOREACH (cache.bvars, vit) {
+				RAnalVar *var = *vit;
 				if (var->delta <= 0) {
 					continue;
 				}
@@ -4447,7 +4463,8 @@ static void cmd_anal_fcn_sig(RCore *core, const char *input) {
 				pj_ks (j, "type", var->type);
 				pj_end (j);
 			}
-			r_list_foreach (cache.svars, iter, var) {
+			R_VEC_FOREACH (cache.svars, vit) {
+				RAnalVar *var = *vit;
 				if (!var->isarg) {
 					continue;
 				}
@@ -14986,14 +15003,11 @@ static void cmd_aaa(RCore *core, const char *input) {
 				if (r_cons_is_breaked (core->cons)) {
 					break;
 				}
-				RList *list = r_anal_var_list (core->anal, fcni, 'r');
-				if (!r_list_empty (list)) {
-					r_list_free (list);
+				if (r_anal_var_count (core->anal, fcni, R_ANAL_VAR_KIND_REG, 1) > 0) {
 					continue;
 				}
 				// extract only reg based var here
 				r_core_recover_vars (core, fcni, true);
-				r_list_free (list);
 			}
 			r_core_task_yield (&core->tasks);
 		}

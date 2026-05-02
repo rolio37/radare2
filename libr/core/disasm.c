@@ -1986,10 +1986,8 @@ static void ds_show_functions_argvar(RDisasmState *ds, RAnalFunction *fcn, RAnal
 	free (constr);
 }
 
-static void print_var_summary(RDisasmState *ds, RList *list) {
+static void print_var_summary(RDisasmState *ds, RAnalFcnVarsCache *cache) {
 	const char *numColor = ds->core->cons->context->pal.num;
-	RAnalVar *var;
-	RListIter *iter;
 	int bp_vars = 0;
 	int sp_vars = 0;
 	int rg_vars = 0;
@@ -2002,7 +2000,9 @@ static void print_var_summary(RDisasmState *ds, RList *list) {
 	const char *bp_args_color = COLOR_RESET (ds);
 	const char *sp_args_color = COLOR_RESET (ds);
 	const char *rg_args_color = COLOR_RESET (ds);
-	r_list_foreach (list, iter, var) {
+	RAnalVar **it;
+	R_VEC_FOREACH_VARS_CACHE (cache, it) {
+		RAnalVar *var = *it;
 		if (var->isarg) {
 			switch (var->kind) {
 			case 'b':
@@ -2048,7 +2048,8 @@ static void print_var_summary(RDisasmState *ds, RList *list) {
 			const char *comma = "";
 			int minsprange = ST32_MAX;
 			int maxsprange = 0;
-			r_list_foreach (list, iter, var) {
+			R_VEC_FOREACH_VARS_CACHE (cache, it) {
+				RAnalVar *var = *it;
 				if (var->isarg) {
 					if (var->kind == 'r') {
 						r_cons_printf (cons, "%s%s", comma, var->regname);
@@ -2081,7 +2082,8 @@ static void print_var_summary(RDisasmState *ds, RList *list) {
 			r_cons_printf (cons, "vars(");
 			int minsprange = ST32_MAX;
 			int maxsprange = 0;
-			r_list_foreach (list, iter, var) {
+			R_VEC_FOREACH_VARS_CACHE (cache, it) {
+				RAnalVar *var = *it;
 				if (!var->isarg) {
 					if (var->kind == 'r') {
 						r_cons_printf (cons, "%s%s", comma, var->regname);
@@ -2283,7 +2285,9 @@ static void ds_show_functions(RDisasmState *ds) {
 	int o_varsum = ds->show_varsum;
 	if (ds->interactive && !o_varsum) {
 		int padding = 10;
-		int numvars = vars_cache.bvars->length + vars_cache.rvars->length + vars_cache.svars->length + padding;
+		int numvars = (int)(RVecAnalVarPtr_length (vars_cache.bvars)
+			+ RVecAnalVarPtr_length (vars_cache.rvars)
+			+ RVecAnalVarPtr_length (vars_cache.svars)) + padding;
 		if (numvars > ds->count) {
 			ds->show_varsum = 1;
 		} else {
@@ -2324,23 +2328,17 @@ static void ds_show_functions(RDisasmState *ds) {
 
 	if (ds->show_vars) {
 		if (ds->show_varsum && ds->show_varsum != -1) {
-			RList *all_vars = vars_cache.bvars;
-			r_list_join (all_vars, vars_cache.svars);
-			r_list_join (all_vars, vars_cache.rvars);
-			print_var_summary (ds, all_vars);
+			print_var_summary (ds, &vars_cache);
 		} else {
 			char spaces[32];
-			RAnalVar *var;
-			RListIter *iter;
 
 			int skipped = 0;
 			if (f->addr == core->addr) {
 				skipped = core->skiplines;
 			}
-			RList *all_vars = vars_cache.rvars;
-			r_list_join (all_vars, vars_cache.bvars);
-			r_list_join (all_vars, vars_cache.svars);
-			r_list_foreach (all_vars, iter, var) {
+			RAnalVar **it;
+			R_VEC_FOREACH_VARS_CACHE (&vars_cache, it) {
+				RAnalVar *var = *it;
 				if (skipped > 0) {
 					skipped--;
 					continue;
