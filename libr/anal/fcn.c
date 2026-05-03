@@ -802,6 +802,7 @@ static int fcn_recurse(RAnal *anal, RAnalFunction *fcn, ut64 addr, ut64 len, int
 	bool varset = has_vars (anal, addr); // Checks if var is already analyzed at given addr
 
 	ut64 movdisp = UT64_MAX; // used by jmptbl when coded as "mov Reg,[Reg*Scale+Disp]"
+	ut64 movdisp_addr = UT64_MAX;
 	ut64 movscale = 0;
 	int maxlen = len * addrbytes;
 	if (is_dalvik) {
@@ -1124,6 +1125,7 @@ noskip:
 			// skip mov reg, reg
 			if (anal->opt.jmptbl && op->scale && op->ireg) {
 				movdisp = op->disp;
+				movdisp_addr = op->addr;
 				movscale = op->refptr? op->refptr: op->ptrsize? op->ptrsize: op->scale;
 				movbasereg = src0? src0->reg: NULL;
 			}
@@ -1227,11 +1229,13 @@ noskip:
 					}
 					// TODO: -1-
 					if (ready) {
-						ret = casetbl_addr == op->ptr
+						const bool has_jmptbl = casetbl_addr == op->ptr
 							? r_anal_jmptbl_walk (anal, fcn, bb, depth, addr, case_shift, jmptbl_addr, op->ptr, 4, table_size, default_case, 4)
 							: try_walkthrough_casetbl (anal, fcn, bb, depth, addr, case_shift, jmptbl_addr, casetbl_addr, op->ptr, 4, table_size, default_case, 4);
-						if (ret) {
+						if (has_jmptbl) {
+							r_anal_switch_op_add_deps (anal, addr, op->addr, addr);
 							anal->lea_jmptbl_ip = addr;
+							ret = true;
 						}
 					}
 				}
@@ -1646,6 +1650,7 @@ noskip:
 								//	movzx reg, byte [reg + case_table]
 								//	jmp dword [reg*4 + jump_table]
 								if (try_walkthrough_casetbl (anal, fcn, bb, depth - 1, op->addr, case_shift, op->ptr, prev_op_storage.disp, op->ptr, anal->config->bits >> 3, table_size, default_case, ret)) {
+									r_anal_switch_op_add_deps (anal, op->addr, prev_op_storage.addr, op->addr);
 									ret = case_table = true;
 								}
 							}
@@ -1666,6 +1671,7 @@ noskip:
 					ut64 table_size, default_case;
 					ut64 jmptbl_base = 0; //UT64_MAX;
 					ut64 lea_op_off = UT64_MAX;
+					ut64 dep_from = movdisp_addr;
 					RListIter *iter;
 					RLeaddrPair *pair;
 					if (movbasereg) {
@@ -1676,6 +1682,7 @@ noskip:
 							}
 							if ((lea_op_off == UT64_MAX || lea_op_off > op->addr - pair->op_addr) && pair->reg && !strcmp (movbasereg, pair->reg)) {
 								lea_op_off = op->addr - pair->op_addr;
+								dep_from = pair->op_addr;
 								jmptbl_base = pair->leaddr;
 							}
 						}
@@ -1685,6 +1692,7 @@ noskip:
 						default_case = UT64_MAX;
 					}
 					ret = r_anal_jmptbl_walk (anal, fcn, bb, depth - 1, op->addr, case_shift, jmptbl_base + movdisp, jmptbl_base, movscale, table_size, default_case, ret);
+					r_anal_switch_op_add_deps (anal, op->addr, dep_from, op->addr);
 					anal->cmpval = UT64_MAX;
 #if 0
 				} else if (movdisp != UT64_MAX) {
@@ -1753,13 +1761,17 @@ noskip:
 								6, // table size is autodetected
 								UT64_MAX, ret);
 #else
-						ret = r_anal_jmptbl_walk (anal,
+						const bool has_jmptbl = r_anal_jmptbl_walk (anal,
 								fcn, bb, depth - 1,
 								op->addr - 12, 0,
 								table_addr,
 								op->addr + 4, 4,
 								0, // table size is autodetected
 								UT64_MAX, ret);
+						if (has_jmptbl) {
+							r_anal_switch_op_add_deps (anal, op->addr - 12, op->addr - 12, op->addr);
+							ret = true;
+						}
 #endif
 						// skip inlined jumptable
 						// idx += table_size;

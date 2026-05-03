@@ -13,6 +13,7 @@ typedef struct {
 	bool show_addr;
 	Sdb *goto_cache;
 	Sdb *db;
+	SetU *switch_addrs;
 	RAnalFunction *fcn;
 	const char *r0;
 	char indentstr[1024];
@@ -493,6 +494,35 @@ static bool is_known_loop_header(PDCState *state, ut64 addr) {
 	return sdb_num_get (state->db, r_strf ("loop_header.%" PFMT64x, addr), 0) != 0;
 }
 
+static bool part_of_a_switch(PDCState *state, ut64 addr) {
+	return state->switch_addrs && set_u_contains (state->switch_addrs, addr);
+}
+
+static void collect_switch_addrs(PDCState *state) {
+	state->switch_addrs = set_u_new ();
+	if (!state->switch_addrs || !state->fcn || !state->fcn->bbs) {
+		return;
+	}
+	RListIter *iter;
+	RAnalBlock *bb;
+	r_list_foreach (state->fcn->bbs, iter, bb) {
+		RAnalSwitchOp *sop = bb->switch_op;
+		if (!sop) {
+			continue;
+		}
+		if (sop->addr != UT64_MAX) {
+			set_u_add (state->switch_addrs, sop->addr);
+		}
+		if (sop->jump_addr != UT64_MAX) {
+			set_u_add (state->switch_addrs, sop->jump_addr);
+		}
+		int i;
+		for (i = 0; i < sop->deps_count; i++) {
+			set_u_add (state->switch_addrs, sop->deps[i]);
+		}
+	}
+}
+
 static ut64 emit_code_lines(PDCState *state, char *code, ut64 start_addr, int indent, bool emit_pj) {
 	RList *lines = r_str_split_list (code, "\n", 0);
 	RListIter *iter;
@@ -506,6 +536,9 @@ static ut64 emit_code_lines(PDCState *state, char *code, ut64 start_addr, int in
 			}
 			const char *s = strchr (line, ' ');
 			line = s? r_str_trim_head_ro (s + 1): "";
+		}
+		if (part_of_a_switch (state, addr)) {
+			continue;
 		}
 		if (R_STR_ISNOTEMPTY (line)) {
 			// drop tail goto into a structured loop header (the while/do owns that edge)
@@ -719,9 +752,10 @@ static void render_switch(PDCState *state, RAnalBlock *sw_bb, RList *visited, in
 		i = w;
 	}
 	char *expr = find_switch_expr (state->core, state->fcn, sw_bb);
+	ut64 table_addr = sop->daddr != UT64_MAX? sop->daddr: sw_bb->addr;
 	print_newline (state, sw_bb->addr, indent);
 	print_str (state, "switch (%s) { // jump table of %d cases at 0x%08" PFMT64x,
-		expr, i, sw_bb->addr);
+		expr, i, table_addr);
 	free (expr);
 
 	int c = 0;
@@ -880,6 +914,9 @@ static void emit_bb_body_no_back_jump(PDCState *state, RAnalBlock *bb, ut64 back
 			rendered = s? r_str_trim_head_ro (s + 1): "";
 		}
 		if (R_STR_ISEMPTY (rendered)) {
+			continue;
+		}
+		if (part_of_a_switch (state, addr)) {
 			continue;
 		}
 		if (line_is_branch_to (rendered, back_hex)
@@ -1064,10 +1101,14 @@ R_API int r_core_pseudo_code(RCore *core, const char *input) {
 		r_config_hold_free (hc);
 		sdb_free (state.db);
 		sdb_free (state.goto_cache);
+		if (state.switch_addrs) {
+			set_u_free (state.switch_addrs);
+		}
 		r_strbuf_free (state.out);
 		r_strbuf_free (state.codestr);
 		return false;
 	}
+	collect_switch_addrs (&state);
 	r_config_hold (hc, "asm.pseudo", "asm.decode", "asm.lines", "asm.bytes", "asm.stackptr", NULL);
 	r_config_hold (hc, "asm.addr", "asm.flags", "asm.lines.fcn", "asm.comments", NULL);
 	r_config_hold (hc, "asm.functions", "asm.section", "asm.cmt.col", "asm.sub.names", NULL);
@@ -1556,5 +1597,8 @@ R_API int r_core_pseudo_code(RCore *core, const char *input) {
 	}
 	sdb_free (state.db);
 	sdb_free (state.goto_cache);
+	if (state.switch_addrs) {
+		set_u_free (state.switch_addrs);
+	}
 	return true;
 }

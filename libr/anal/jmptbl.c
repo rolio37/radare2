@@ -37,8 +37,8 @@ static RLeaddrPair *leaddrs_find_before(RList *leaddrs, const char *reg, ut64 be
 	return NULL;
 }
 
-static bool arm64_resolve_dispatch(RAnal *anal, RList *leaddrs, ut64 br_addr, const char *target_reg, ut64 *opaddr, ut64 *basptr, ut64 *tblptr) {
-	R_RETURN_VAL_IF_FAIL (anal && leaddrs && target_reg && opaddr && basptr && tblptr, false);
+static bool arm64_resolve_dispatch(RAnal *anal, RList *leaddrs, ut64 br_addr, const char *target_reg, ut64 *opaddr, ut64 *depaddr, ut64 *basptr, ut64 *tblptr) {
+	R_RETURN_VAL_IF_FAIL (anal && leaddrs && target_reg && opaddr && depaddr && basptr && tblptr, false);
 	const ut64 lookback_bytes = JMPTBL_DISPATCH_LOOKBACK * 4;
 	if (br_addr < lookback_bytes) {
 		return false;
@@ -113,6 +113,7 @@ static bool arm64_resolve_dispatch(RAnal *anal, RList *leaddrs, ut64 br_addr, co
 		return false;
 	}
 	*opaddr = bp->op_addr;
+	*depaddr = R_MIN (bp->op_addr, tp->op_addr);
 	*basptr = bp->leaddr;
 	*tblptr = tp->leaddr;
 	return true;
@@ -358,7 +359,7 @@ static SwitchTargetResult switch_compute_target(const RAnalSwitchSpec *spec,
 	return SWITCH_TARGET_OK;
 }
 
-static void apply_switch(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut64 switch_addr, ut64 jmptbl_addr, ut64 cases_count, ut64 default_case_addr, int esize) {
+static void apply_switch(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut64 switch_addr, ut64 jump_addr, ut64 jmptbl_addr, ut64 vtbl_addr, ut64 cases_count, ut64 default_case_addr, int esize) {
 	char tmp[64];
 	snprintf (tmp, sizeof (tmp), "switch table (%" PFMT64u " cases) at 0x%" PFMT64x, cases_count, jmptbl_addr);
 	r_meta_set_string (anal, R_META_TYPE_COMMENT, switch_addr, tmp);
@@ -368,6 +369,8 @@ static void apply_switch(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block, ut6
 	// by the legacy walkers.
 	if (block && block->switch_op) {
 		block->switch_op->daddr = jmptbl_addr;
+		block->switch_op->vtbl_addr = vtbl_addr;
+		block->switch_op->jump_addr = jump_addr;
 		if (esize > 0) {
 			block->switch_op->dsize = esize;
 		}
@@ -688,7 +691,8 @@ static bool switch_apply_flagged(RAnal *anal, RAnalFunction *fcn, RAnalBlock *bl
 		if (def == 0) {
 			def = UT64_MAX;
 		}
-		apply_switch (anal, fcn, block, spec->startea, spec->jtbl_addr, last_applied, def, esize);
+		apply_switch (anal, fcn, block, spec->startea, spec->startea, spec->jtbl_addr,
+			need_vtbl? spec->vtbl_addr: UT64_MAX, last_applied, def, esize);
 		switch_op_apply_spec (block, spec);
 	}
 	free (jmptbl);
@@ -939,7 +943,8 @@ R_API bool try_walkthrough_casetbl(RAnal *anal, RAnalFunction *fcn, RAnalBlock *
 		if (default_case == 0) {
 			default_case = UT64_MAX;
 		}
-		apply_switch (anal, fcn, block, ip, jmptbl_loc == jmptbl_off? casetbl_loc: jmptbl_loc, case_idx, default_case, jmptbl_loc == jmptbl_off? 1: sz);
+		apply_switch (anal, fcn, block, ip, ip, jmptbl_loc, casetbl_loc,
+			case_idx, default_case, sz);
 	}
 
 	free (jmptbl);
@@ -1007,7 +1012,8 @@ R_API bool r_anal_jmptbl_walk(RAnal *anal, RAnalFunction *fcn, RAnalBlock *block
 		if (default_target == 0) {
 			default_target = UT64_MAX;
 		}
-		apply_switch (anal, fcn, block, ip, jmptbl_loc, case_idx, default_target, sz);
+		apply_switch (anal, fcn, block, ip, ip, jmptbl_loc, UT64_MAX,
+			case_idx, default_target, sz);
 	}
 
 	free (jmptbl);
@@ -1247,7 +1253,8 @@ R_API int walkthrough_arm_jmptbl_style(RAnal *anal, RAnalFunction *fcn, RAnalBlo
 		if (default_case == 0 || default_case == UT32_MAX) {
 			default_case = UT64_MAX;
 		}
-		apply_switch (anal, fcn, block, ip, jmptbl_loc, case_idx, default_case, sz);
+		apply_switch (anal, fcn, block, ip, ip, jmptbl_loc, UT64_MAX,
+			case_idx, default_case, sz);
 	}
 	jmptbl_target_ctx_fini (&target_ctx);
 	return ret;
@@ -1390,7 +1397,8 @@ R_API void r_anal_jmptbl_list(RAnal *anal, RAnalFunction *fcn, RAnalBlock *bb, u
 	r_list_foreach (cases, iter, kase) {
 		jmptbl_apply_caseop (anal, fcn, bb, s, saddr, loadsz, kase);
 	}
-	apply_switch (anal, fcn, bb, saddr, jaddr, r_list_length (cases), UT64_MAX, loadsz);
+	apply_switch (anal, fcn, bb, saddr, saddr, jaddr, UT64_MAX,
+		r_list_length (cases), UT64_MAX, loadsz);
 	set_u_free (s);
 }
 
@@ -1401,8 +1409,8 @@ R_IPI bool r_anal_jmptbl_arm64_from_br(RAnal *anal, RAnalFunction *fcn, RAnalBlo
 	if (loadsize != 1 && loadsize != 2 && loadsize != 4) {
 		return false;
 	}
-	ut64 opaddr = UT64_MAX, basptr = UT64_MAX, tblptr = UT64_MAX;
-	if (!arm64_resolve_dispatch (anal, anal->leaddrs, op->addr, op->reg, &opaddr, &basptr, &tblptr)) {
+	ut64 opaddr = UT64_MAX, depaddr = UT64_MAX, basptr = UT64_MAX, tblptr = UT64_MAX;
+	if (!arm64_resolve_dispatch (anal, anal->leaddrs, op->addr, op->reg, &opaddr, &depaddr, &basptr, &tblptr)) {
 		return false;
 	}
 	// anal->cmpval can be stale (clobbered by another branch of the
@@ -1440,7 +1448,9 @@ R_IPI bool r_anal_jmptbl_arm64_from_br(RAnal *anal, RAnalFunction *fcn, RAnalBlo
 		jmptbl_apply_caseop (anal, fcn, bb, s, opaddr, loadsize, &kase);
 		valid_cases++;
 	}
-	apply_switch (anal, fcn, bb, opaddr, tblptr, valid_cases, UT64_MAX, loadsize);
+	apply_switch (anal, fcn, bb, opaddr, op->addr, tblptr, UT64_MAX,
+		valid_cases, UT64_MAX, loadsize);
+	r_anal_switch_op_add_deps (anal, op->addr, depaddr, op->addr);
 	set_u_free (s);
 	free (table);
 	return true;
