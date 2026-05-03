@@ -289,7 +289,7 @@ R_API char *r_str_html_strip(const char *ptr, int *newlen) {
 				str = ptr;
 				continue;
 			} else if (isdigit (ptr[0]) && ptr[1] == ';' && isdigit (ptr[2])) {
-				char *m = strchr (ptr, 'm');
+				const char *m = strchr (ptr, 'm');
 				if (m) {
 					gethtmlrgb (ptr, background_color, sizeof (background_color));
 					need_to_set = true;
@@ -298,7 +298,7 @@ R_API char *r_str_html_strip(const char *ptr, int *newlen) {
 					esc = 0;
 				}
 			} else if (isdigit (ptr[0]) && isdigit (ptr[1]) && ptr[2] == ';') {
-				char *m = strchr (ptr, 'm');
+				const char *m = strchr (ptr, 'm');
 				if (m) {
 					gethtmlrgb (ptr, text_color, sizeof (text_color));
 					need_to_set = true;
@@ -307,14 +307,14 @@ R_API char *r_str_html_strip(const char *ptr, int *newlen) {
 					esc = 0;
 				}
 			} else if (r_str_startswith (ptr, "48;5;") || r_str_startswith (ptr, "48;2;")) {
-				char *end = strchr (ptr, 'm');
+				const char *end = strchr (ptr, 'm');
 				gethtmlrgb (ptr, background_color, sizeof (background_color));
 				need_to_set = true;
 				ptr = end;
 				str = ptr + 1;
 				esc = 0;
 			} else if (r_str_startswith (ptr, "38;5;") || r_str_startswith (ptr, "38;2;")) {
-				char *end = strchr (ptr, 'm');
+				const char *end = strchr (ptr, 'm');
 				gethtmlrgb (ptr, text_color, sizeof (text_color));
 				need_to_set = true;
 				if (end) {

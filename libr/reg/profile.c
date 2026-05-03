@@ -334,17 +334,27 @@ static char *gdb_to_r2_profile(const char *gdb) {
 		return NULL;
 	}
 	char *ptr1, *gptr, *gptr1;
+	char *profile = strdup (gdb);
+	if (!profile) {
+		r_strbuf_free (sb);
+		return NULL;
+	}
 	char name[16], groups[128], type[16];
 	const int all = 1, gpr = 2, save = 4, restore = 8, float_ = 16,
 		  sse = 32, vector = 64, system = 128, mmx = 256;
 	int number, rel, offset, size, type_bits, ret;
 	// Every line is -
 	// Name Number Rel Offset Size Type Groups
-	const char *ptr = r_str_trim_head_ro (gdb);
+	char *ptr = profile;
+	while (isspace ((ut8)*ptr)) {
+		ptr++;
+	}
 
 	// It's possible someone includes the heading line too. Skip it
 	if (r_str_startswith (ptr, "Name")) {
 		if (!(ptr = strchr (ptr, '\n'))) {
+			free (profile);
+			r_strbuf_free (sb);
 			return NULL;
 		}
 		ptr++;
@@ -361,6 +371,7 @@ static char *gdb_to_r2_profile(const char *gdb) {
 			*ptr1 = '\0';
 		} else {
 			R_LOG_WARN ("Could not parse line: %s (missing newline)", ptr);
+			free (profile);
 			r_strbuf_free (sb);
 			return false;
 		}
@@ -369,6 +380,7 @@ static char *gdb_to_r2_profile(const char *gdb) {
 		if (ret < 6) {
 			if (*ptr != '*') {
 				R_LOG_WARN ("Could not parse line: %s", ptr);
+				free (profile);
 				r_strbuf_free (sb);
 				return false;
 			}
@@ -448,7 +460,9 @@ static char *gdb_to_r2_profile(const char *gdb) {
 		ptr = ptr1 + 1;
 		continue;
 	}
-	return r_strbuf_drain (sb);
+	char *out = r_strbuf_drain (sb);
+	free (profile);
+	return out;
 }
 
 R_API char *r_reg_parse_gdb_profile(const char *profile_file) {

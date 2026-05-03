@@ -5655,7 +5655,7 @@ static Register parseReg(RArchSession *a, const char *str, size_t *pos, ut32 *ty
 
 static void parse_segment_offset(RArchSession *a, const char *str, size_t *pos, Operand *op, int reg_index) {
 	int nextpos = *pos;
-	char *c = strchr (str + nextpos, ':');
+	const char *c = strchr (str + nextpos, ':');
 	if (c) {
 		nextpos ++; // Skip the ':'
 		c = strchr (str + nextpos, '[');
@@ -5665,7 +5665,7 @@ static void parse_segment_offset(RArchSession *a, const char *str, size_t *pos, 
 		op->regs[reg_index] = op->reg;
 		op->type |= OT_MEMORY;
 		op->offset_sign = 1;
-		char *p = strchr (str + nextpos, '-');
+		const char *p = strchr (str + nextpos, '-');
 		if (p) {
 			op->offset_sign = -1;
 			nextpos ++;
@@ -5811,7 +5811,7 @@ static int parseOperand(RArchSession *a, const char *str, Operand *op, bool isre
 					op->type = 0;	// Make the result invalid
 				}
 			} else {
-				char *p = strchr (str, '+');
+				const char *p = strchr (str, '+');
 				op->offset_sign = 1;
 				if (!p) {
 					p = strchr (str, '-');
@@ -5820,9 +5820,9 @@ static int parseOperand(RArchSession *a, const char *str, Operand *op, bool isre
 					}
 				}
 				//with SIB notation, we need to consider the right sign
-				char *plus = strchr (str, '+');
-				char *minus = strchr (str, '-');
-				char *closeB = strchr (str, ']');
+				const char *plus = strchr (str, '+');
+				const char *minus = strchr (str, '-');
+				const char *closeB = strchr (str, ']');
 				if (plus && minus && plus < closeB && minus < closeB) {
 					op->offset_sign = -1;
 				}
@@ -5881,10 +5881,10 @@ static int parseOperand(RArchSession *a, const char *str, Operand *op, bool isre
 				op->is_good_flag = true;
 			}
 
-			char *p = strchr (str, '-');
+			const char *p = strchr (str, '-');
 			if (p) {
 				op->sign = -1;
-				str = p++;
+				str = p;
 			}
 			op->immediate = getnum (a, str);
 		} else if (op->reg < X86R_UNDEFINED) {
@@ -5922,10 +5922,10 @@ static int parseOperand(RArchSession *a, const char *str, Operand *op, bool isre
 				op->is_good_flag = true;
 			}
 #endif
-			char *p = strchr (str, '-');
+			const char *p = strchr (str, '-');
 			if (p) {
 				op->sign = -1;
-				str = p++;
+				str = p;
 			}
 			bool berr;
 			op->immediate = getnum (a, str, &berr);
@@ -5968,7 +5968,7 @@ static int parseOpcode(RArchSession *a, const char *op, Opcode *out) {
 		out->has_bnd = true;
 		op += 4;
 	}
-	char *args = strchr (op, ' ');
+	const char *args = strchr (op, ' ');
 	out->mnemonic = args? r_str_ndup (op, args - op): strdup (op);
 	out->operands[0].type = out->operands[1].type = out->operands[2].type = 0;
 	out->operands[0].extended = out->operands[1].extended = out->operands[2].extended = false;

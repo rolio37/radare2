@@ -1673,7 +1673,7 @@ static void dietline_print_risprompt(const char *gcomp_line) {
 		printf ("\r (ri-search): ");
 		const char *text = gcomp_line;
 		while (text) {
-			char *m = strstr (text, line->buffer.data);
+			const char *m = strstr (text, line->buffer.data);
 			if (m) {
 				fwrite (text, m - text, 1, stdout);
 				printf (Color_INVERT);

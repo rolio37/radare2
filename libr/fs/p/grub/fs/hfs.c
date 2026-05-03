@@ -911,6 +911,7 @@ grub_hfs_find_dir(struct grub_hfs_data *data, const char *path, struct grub_hfs_
 	int inode = data->rootdir;
 	char *next;
 	char *origpath;
+	char *path_iter;
 	union {
 		struct grub_hfs_filerec frec;
 		struct grub_hfs_dirrec dir;
@@ -928,19 +929,19 @@ grub_hfs_find_dir(struct grub_hfs_data *data, const char *path, struct grub_hfs_
 		return grub_errno;
 	}
 
-	path = origpath;
-	while (*path == '/') {
-		path++;
+	path_iter = origpath;
+	while (*path_iter == '/') {
+		path_iter++;
 	}
 
-	while (path && grub_strlen (path)) {
+	while (path_iter && grub_strlen (path_iter)) {
 		if (fdrec.frec.type != GRUB_HFS_FILETYPE_DIR) {
 			grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a directory");
 			goto fail;
 		}
 
 		/* Isolate a part of the path.  */
-		next = strchr (path, '/');
+		next = strchr (path_iter, '/');
 		if (next) {
 			while (*next == '/') {
 				*(next++) = '\0';
@@ -950,9 +951,9 @@ grub_hfs_find_dir(struct grub_hfs_data *data, const char *path, struct grub_hfs_
 		struct grub_hfs_catalog_key key;
 
 		key.parent_dir = grub_cpu_to_be32 (inode);
-		key.strlen = grub_strlen (path);
+		key.strlen = grub_strlen (path_iter);
 		// grub_strcpy ((char *) (key.str), path);
-		strncpy ((char *)key.str, (char *)path, sizeof (key.str) - 1);
+		strncpy ((char *)key.str, path_iter, sizeof (key.str) - 1);
 		key.str[sizeof (key.str) - 1] = 0;
 
 		/* Lookup this node.  */
@@ -966,7 +967,7 @@ grub_hfs_find_dir(struct grub_hfs_data *data, const char *path, struct grub_hfs_
 		}
 
 		inode = grub_be_to_cpu32 (fdrec.dir.dirid);
-		path = next;
+		path_iter = next;
 	}
 
 	if (retdata) {

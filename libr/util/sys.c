@@ -1111,7 +1111,7 @@ R_API void r_sys_perror_str(const char *fun) {
 }
 
 R_API bool r_sys_arch_match(const char *archstr, const char *arch) {
-	char *ptr;
+	const char *ptr;
 	if (!archstr || !arch || !*archstr || !*arch) {
 		return true;
 	}

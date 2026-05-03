@@ -809,7 +809,7 @@ continuation:
 	if ((!grep->range_line && grep->line < 0) || grep->range_line) {
 		int total_lines = 0;
 		while ((int) (size_t) (in - buf) < len) {
-			char *p = strchr (in, '\n');
+			const char *p = strchr (in, '\n');
 			if (!p) {
 				break;
 			}
@@ -837,7 +837,7 @@ continuation:
 
 	in = buf;
 	while ((int) (size_t) (in - buf) < len) {
-		char *p = strchr (in, '\n');
+		const char *p = strchr (in, '\n');
 		if (!p) {
 			break;
 		}

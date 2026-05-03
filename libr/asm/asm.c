@@ -1051,7 +1051,7 @@ static int parse_asm_directive(RAsm *a, RAnalOp *op, RAsmCode *acode, char *ptr_
 	return ret;
 }
 
-static inline char *next_token(const char *tok) {
+static inline char *next_token(char *tok) {
 	const char *const delimiters = ";\n\r";
 	const char *d = delimiters;
 	for (; *d; d++) {

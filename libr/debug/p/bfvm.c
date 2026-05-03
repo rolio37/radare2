@@ -116,7 +116,7 @@ R_API void bfvm_dec(BfvmCPU *c) {
 }
 
 R_API int bfvm_reg_set(BfvmCPU *c, const char *str) {
-	char *ptr = strchr (str, ' ');
+	const char *ptr = strchr (str, ' ');
 	if (!ptr) {
 		return 0;
 	}

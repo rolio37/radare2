@@ -216,16 +216,24 @@ static char *getstr(const char *src, size_t *R_NULLABLE out_len, bool escape) {
 		return NULL;
 	case '@':
 		{
-			char *pat, *endptr;
+			const char *pat;
+			char *endptr;
 			if ((pat = strchr (src, '@'))) {
 				size_t i, pat_len;
-				*pat++ = 0;
-				len = strtoul (src, &endptr, 10);
-				if (*endptr != 0) {
-					R_LOG_ERROR ("Invalid num in @<num>@<pattern> expr");
+				char *num = r_str_ndup (src, pat - src);
+				if (!num) {
 					return NULL;
 				}
-			if (errno == EINVAL || errno == ERANGE || len > 64000000) {
+				errno = 0;
+				len = strtoul (num, &endptr, 10);
+				if (*endptr != 0) {
+					R_LOG_ERROR ("Invalid num in @<num>@<pattern> expr");
+					free (num);
+					return NULL;
+				}
+				free (num);
+				pat++;
+				if (errno == EINVAL || errno == ERANGE || len > 64000000) {
 					R_LOG_ERROR ("Out-of-bounds num in @<num>@<pattern> expr");
 					return NULL;
 				}

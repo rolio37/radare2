@@ -35,7 +35,7 @@ static RIODesc *r_io_ar_open(RIO *io, const char *file, int rw, int mode) {
 		return NULL;
 	}
 	RIODesc *res = NULL;
-	const char *arname = strstr (uri, "://");
+	char *arname = strstr (uri, "://");
 	if (arname) {
 		arname += 3;
 		char *filename = strstr (arname, "//");

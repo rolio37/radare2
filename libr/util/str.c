@@ -208,7 +208,7 @@ R_API ut64 r_str_bits_from_string(const char *buf, const char *bitz) {
 	ut64 out = 0LL;
 	/* return the numeric value associated to a string (rflags) */
 	for (; *buf; buf++) {
-		char *ch = strchr (bitz, toupper ((int) (ut8)*buf));
+		const char *ch = strchr (bitz, toupper ((int) (ut8)*buf));
 		if (!ch) {
 			ch = strchr (bitz, tolower ((int) (ut8)*buf));
 			if (!ch) {
@@ -2430,7 +2430,7 @@ R_API bool r_str_glob(const char *str, const char *glob) {
 	if (!glob) {
 		return true;
 	}
-	char *begin = strchr (glob, '^');
+	const char *begin = strchr (glob, '^');
 	if (begin) {
 		begin++;
 		glob = begin;
@@ -3219,13 +3219,12 @@ R_API char *r_str_prefix_all(const char *s, const char *pfx) {
 }
 
 #define HASCH(x) strchr(input_value, x)
-#define CAST (void *) (size_t)
 R_API ut8 r_str_contains_macro(const char *input_value) {
-	char *has_tilde = input_value? HASCH ('~'): NULL,
+	const char *has_tilde = input_value? HASCH ('~'): NULL,
 	*has_bang = input_value? HASCH ('!'): NULL,
-	*has_brace = input_value? CAST (HASCH ('[') || HASCH (']')): NULL,
-	*has_paren = input_value? CAST (HASCH ('(') || HASCH (')')): NULL,
-	*has_cbrace = input_value? CAST (HASCH ('{') || HASCH ('}')): NULL,
+	*has_brace = input_value && (HASCH ('[') || HASCH (']'))? input_value: NULL,
+	*has_paren = input_value && (HASCH ('(') || HASCH (')'))? input_value: NULL,
+	*has_cbrace = input_value && (HASCH ('{') || HASCH ('}'))? input_value: NULL,
 	*has_qmark = input_value? HASCH ('?'): NULL,
 	*has_colon = input_value? HASCH (':'): NULL,
 	*has_at = input_value? strchr (input_value, '@'): NULL;
@@ -3486,7 +3485,7 @@ R_API char *r_str_repeat(const char *ch, int sz) {
 }
 
 R_API char *r_str_between(const char *cmt, const char *prefix, const char *suffix) {
-	char *c0, *c1;
+	const char *c0, *c1;
 	if (!cmt || !prefix || !suffix || !*cmt) {
 		return NULL;
 	}

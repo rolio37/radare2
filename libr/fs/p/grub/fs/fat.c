@@ -626,9 +626,10 @@ grub_fat_find_dir_hook(const char *filename, struct grub_fat_dir_entry *dir, voi
 /* Find the underlying directory or file in PATH and return the
 next path. If there is no next path or an error occurs, return NULL.
 If HOOK is specified, call it with each file name.  */
-static char *
+static const char *
 grub_fat_find_dir(grub_disk_t disk, struct grub_fat_data *data, const char *path, int(*hook)(const char *filename, const struct grub_dirhook_info *info, void *closure), void *closure) {
-	char *dirname, *dirp;
+	char *dirname;
+	const char *dirp;
 	struct grub_fat_find_dir_closure c;
 
 	if (! (data->attr & GRUB_FAT_ATTR_DIRECTORY)) {
@@ -679,7 +680,8 @@ grub_fat_dir(grub_device_t device, const char *path, int(*hook)(const char *file
 	grub_disk_t disk = device->disk;
 	grub_size_t len;
 	char *dirname = 0;
-	char *p;
+	char *endp;
+	const char *p;
 
 	data = grub_fat_mount (disk);
 	if (!data) {
@@ -693,11 +695,11 @@ grub_fat_dir(grub_device_t device, const char *path, int(*hook)(const char *file
 		goto fail;
 	}
 	grub_memcpy (dirname, path, len);
-	p = dirname + len;
+	endp = dirname + len;
 	if (len > 0 && path[len - 1] != '/') {
-		*p++ = '/';
+		*endp++ = '/';
 	}
-	*p = '\0';
+	*endp = '\0';
 	p = dirname;
 
 	do {
@@ -715,7 +717,7 @@ fail:
 static grub_err_t
 grub_fat_open(grub_file_t file, const char *name) {
 	struct grub_fat_data *data = 0;
-	char *p = (char *)name;
+	const char *p = name;
 
 	data = grub_fat_mount (file->device->disk);
 	if (!data) {

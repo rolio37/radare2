@@ -47,7 +47,7 @@ static const char *skip_comment_py(const char *code) {
 	if (*code != '#') {
 		return code;
 	}
-	char *end = strchr (code, '\n');
+	const char *end = strchr (code, '\n');
 	return end ? end + 1 : code + 1;
 }
 
@@ -171,13 +171,13 @@ R_API char *r_hex_from_c_str(char *out, const char **code) {
 
 static const char *skip_comment_c(const char *code) {
 	if (r_str_startswith (code, "/*")) {
-		char *end = strstr (code, "*/");
+		const char *end = strstr (code, "*/");
 		if (end) {
 			return end + 2;
 		}
 		R_LOG_ERROR ("Missing closing comment");
 	} else if (r_str_startswith (code, "//")) {
-		char *end = strchr (code, '\n');
+		const char *end = strchr (code, '\n');
 		if (end) {
 			return end + 1;
 		}
@@ -234,16 +234,16 @@ R_API char *r_hex_from_c(const char *code) {
 
 R_API char *r_hex_from_js(const char *code) {
 	R_RETURN_VAL_IF_FAIL (code, NULL);
-	char *s1 = strchr (code, '\'');
-	char *s2 = strchr (code, '"');
+	const char *s1 = strchr (code, '\'');
+	const char *s2 = strchr (code, '"');
 
 	/* there are no strings in the input */
 	if (!s1 || !s2) {
 		return NULL;
 	}
 
-	char *start;
-	char *end;
+	const char *start;
+	const char *end;
 	if (s1 < s2) {
 		start = s1;
 		end = strchr (start + 1, '\'');

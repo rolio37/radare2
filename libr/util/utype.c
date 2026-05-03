@@ -714,7 +714,7 @@ R_API void r_type_del(Sdb *TDB, const char *name) {
 	if (!kind) {
 		return;
 	}
-	char *comma = strchr (kind, ',');
+	const char *comma = strchr (kind, ',');
 	if (comma) {
 		R_LOG_WARN ("Unexpected comma in kind (%s) for (%s)", kind, name);
 	}

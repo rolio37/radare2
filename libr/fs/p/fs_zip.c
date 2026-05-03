@@ -177,7 +177,7 @@ static RList *fs_zip_dir(RFSRoot *root, const char *path, R_UNUSED int view) {
 				free (k);
 				continue;
 			}
-			char *p = strchr (n, '/');
+			const char *p = strchr (n, '/');
 			if (!p || (*p && !p[1])) {
 				char type = (sb.size == 0 && is_dir)? 'd': 'f';
 				char *nn = (type == 'd')? r_str_ndup (n, strlen (n) - 1): strdup (n);

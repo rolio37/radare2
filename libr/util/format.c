@@ -1572,12 +1572,12 @@ static int r_print_format_struct(RPrintFormat *pf, ut64 seek, const ut8 *b, int 
 	return ret;
 }
 
-static char *get_args_offset(const char *arg) {
-	char *args = strchr (arg, ' ');
-	char *sq_bracket = strchr (arg, '[');
+static const char *get_args_offset(const char *arg) {
+	const char *args = strchr (arg, ' ');
+	const char *sq_bracket = strchr (arg, '[');
 	int max = 30;
 	if (args && sq_bracket) {
-		char *csq_bracket = strchr (arg, ']');
+		const char *csq_bracket = strchr (arg, ']');
 		while (args && csq_bracket && csq_bracket > args && max--) {
 			args = strchr (csq_bracket, ' ');
 		}
@@ -1984,7 +1984,7 @@ R_API int r_print_format_internal(RPrint *p, RPrintFormat *pf, ut64 seek, const 
 	char *args = NULL, tmp, last = 0;
 	ut64 addr = 0, addr64 = 0, seeki = 0;
 	char namefmt[128], *field = NULL;
-	const char *arg = NULL;
+	char *arg = NULL;
 	const char *argend;
 	int viewflags = 0;
 	char *oarg = NULL;
@@ -2011,7 +2011,10 @@ R_API int r_print_format_internal(RPrint *p, RPrintFormat *pf, ut64 seek, const 
 		internal_format = strdup (formatname);
 	}
 	if (internal_format) {
-		const char *fmt = r_str_trim_head_ro (internal_format);
+		char *fmt = internal_format;
+		while (isspace ((ut8)*fmt)) {
+			fmt++;
+		}
 		argend = fmt + strlen (fmt);
 		arg = fmt;
 	} else {
@@ -2067,16 +2070,16 @@ R_API int r_print_format_internal(RPrint *p, RPrintFormat *pf, ut64 seek, const 
 	}
 
 	/* get args */
-	args = get_args_offset (arg);
-	if (args) {
+	const char *args_offset = get_args_offset (arg);
+	if (args_offset) {
 		int maxl = 0;
-		argend = args;
-		tmp = *args;
+		argend = args_offset;
+		tmp = *args_offset;
 		while (tmp == ' ') {
-			args++;
-			tmp = *args;
+			args_offset++;
+			tmp = *args_offset;
 		}
-		args = strdup (args);
+		args = strdup (args_offset);
 		nargs = r_str_word_set0_stack (args);
 		if (nargs == 0) {
 			R_FREE (args);
@@ -2154,7 +2157,7 @@ R_API int r_print_format_internal(RPrint *p, RPrintFormat *pf, ut64 seek, const 
 		pj_ka (pf->pj, "array");
 	}
 	for (; times; times--) { // repeat N times
-		const char *orig = arg;
+		char *orig = arg;
 		int first = 1;
 		if (otimes > 1) {
 			if (pf->mode & R_PRINT_JSON) {

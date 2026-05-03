@@ -233,7 +233,7 @@ static PathInfo *resolve_path_info(const char *input) {
 	if (r_file_is_directory (path)) {
 		pattern = strdup ("*");
 	} else {
-		char *p = strrchr (path, '/');
+		const char *p = strrchr (path, '/');
 		if (p) {
 			size_t off = p - path;
 			d = (char *)calloc (1, off + 1);

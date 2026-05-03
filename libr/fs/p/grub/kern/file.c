@@ -40,7 +40,7 @@ GRUB_EXPORT(grub_file_pb_read);
 char *
 grub_file_get_device_name(const char *name) {
 	if (name[0] == '(') {
-		char *p = strchr (name, ')');
+		const char *p = strchr (name, ')');
 		char *ret;
 
 		if (!p) {
@@ -66,7 +66,7 @@ grub_file_open(const char *name) {
 	grub_device_t device;
 	grub_file_t file = 0;
 	char *device_name;
-	char *file_name;
+	const char *file_name;
 
 	device_name = grub_file_get_device_name (name);
 	if (grub_errno) {

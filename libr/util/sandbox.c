@@ -65,7 +65,7 @@ static bool is_hidden_path(const char *path) {
 R_API bool r_sandbox_check_path(const char *path) {
 	R_RETURN_VAL_IF_FAIL (path, false);
 	size_t root_len;
-	char *p;
+	const char *p;
 	/* XXX: the sandbox can be bypassed if a directory is symlink */
 	if (G_enabled && !(G_graintype & R_SANDBOX_GRAIN_HIDDEN) && is_hidden_path (path)) {
 		return false;
@@ -101,7 +101,7 @@ R_API bool r_sandbox_check_path(const char *path) {
 	}
 
 	// Or does it have .. in some other position?
-	for (p = strstr (path, "/.."); p; p = strstr (p, "/..")) {
+	for (p = strstr (path, "/.."); p; p = strstr (p + 1, "/..")) {
 		if (p[3] == '\0' || p[3] == '/') {
 			return false;
 		}
@@ -163,11 +163,11 @@ R_API bool r_sandbox_check(int mask) {
 
 R_API bool r_sandbox_check_localhost(const char *str) {
 	R_RETURN_VAL_IF_FAIL (str, false);
-	char *peekaboo = strstr (str, "://");
+	const char *peekaboo = strstr (str, "://");
 	if (peekaboo) {
 		str = peekaboo + 3;
 	}
-	char *end = strchr (str, '/');
+	const char *end = strchr (str, '/');
 	if (!end) {
 		if (*str != ':' && *str != '[') {
 			end = strchr (str, ':');

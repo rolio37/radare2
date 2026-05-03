@@ -133,7 +133,7 @@ int write_thread_id(char *dest, int len, int pid, int tid, bool multiprocess) {
 }
 
 int read_thread_id(const char *src, int *pid, int *tid, bool multiprocess) {
-	char *ptr1;
+	const char *ptr1;
 	if (multiprocess && *src == 'p') {
 		src++;
 		if (!(ptr1 = strchr (src, '.'))) {

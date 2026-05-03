@@ -82,25 +82,32 @@ static RIODesc *__rap_open(RIO *io, const char *pathname, int rw, int mode) {
 		return NULL;
 	}
 	bool is_ssl = r_str_startswith (pathname, "raps://");
-	const char *host = pathname + (is_ssl? 7: 6);
+	char *host = strdup (pathname + (is_ssl? 7: 6));
+	if (!host) {
+		return NULL;
+	}
 	if (!(port = strchr (host, ':'))) {
 		R_LOG_ERROR ("rap: wrong uri");
+		free (host);
 		return NULL;
 	}
 	int listenmode = (*host == ':');
 	*port++ = 0;
 	if (!*port) {
+		free (host);
 		return NULL;
 	}
 	int p = atoi (port);
 	char *file = r_str_after (port + 1, '/');
 	if (r_sandbox_enable (0)) {
 		R_LOG_ERROR ("sandbox: Cannot use network");
+		free (host);
 		return NULL;
 	}
 	if (listenmode) {
 		if (p <= 0) {
 			R_LOG_ERROR ("cannot listen. Try rap://:9999");
+			free (host);
 			return NULL;
 		}
 		// TODO: Handle ^C signal (SIGINT, exit); // ???
@@ -110,6 +117,7 @@ static RIODesc *__rap_open(RIO *io, const char *pathname, int rw, int mode) {
 		rior->client = rior->fd = r_socket_new (is_ssl);
 		if (!rior->fd) {
 			free (rior);
+			free (host);
 			return NULL;
 		}
 		if (is_ssl) {
@@ -117,37 +125,45 @@ static RIODesc *__rap_open(RIO *io, const char *pathname, int rw, int mode) {
 				if (!r_socket_listen (rior->fd, port, file)) {
 					r_socket_free (rior->fd);
 					free (rior);
+					free (host);
 					return NULL;
 				}
 			} else {
 				free (rior);
+				free (host);
 				return NULL;
 			}
 		} else {
 			if (!r_socket_listen (rior->fd, port, NULL)) {
 				r_socket_free (rior->fd);
 				free (rior);
+				free (host);
 				return NULL;
 			}
 		}
-		return r_io_desc_new (io, &r_io_plugin_rap,
+		RIODesc *desc = r_io_desc_new (io, &r_io_plugin_rap,
 			pathname, rw, mode, rior);
+		free (host);
+		return desc;
 	}
 	RSocket *s = r_socket_new (is_ssl);
 	if (!s) {
 		R_LOG_ERROR ("Cannot create new socket");
+		free (host);
 		return NULL;
 	}
 	R_LOG_INFO ("Connecting to %s, port %s", host, port);
 	if (!r_socket_connect (s, host, port, R_SOCKET_PROTO_TCP, 0)) {
 		R_LOG_ERROR ("Cannot connect to '%s' (%d)", host, p);
 		r_socket_free (s);
+		free (host);
 		return NULL;
 	}
 	R_LOG_INFO ("Connected to: %s at port %s", host, port);
 	RIORap *rior = R_NEW0 (RIORap);
 	if (!rior) {
 		r_socket_free (s);
+		free (host);
 		return NULL;
 	}
 	rior->listener = false;
@@ -157,6 +173,7 @@ static RIODesc *__rap_open(RIO *io, const char *pathname, int rw, int mode) {
 		if (i == -1) {
 			free (rior);
 			r_socket_free (s);
+			free (host);
 			return NULL;
 		}
 		if (i > 0) {
@@ -167,8 +184,10 @@ static RIODesc *__rap_open(RIO *io, const char *pathname, int rw, int mode) {
 			io->coreb.cmd (io->coreb.core, ".:om*");
 		}
 	}
-	return r_io_desc_new (io, &r_io_plugin_rap,
+	RIODesc *desc = r_io_desc_new (io, &r_io_plugin_rap,
 		pathname, rw, mode, rior);
+	free (host);
+	return desc;
 }
 
 static int __rap_listener(RIODesc *fd) {
