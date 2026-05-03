@@ -1,4 +1,4 @@
-/* radare - LGPL - Copyright 2009-2025 - nibble, pancake, dso, lazula */
+/* radare - LGPL - Copyright 2009-2026 - nibble, pancake, dso, lazula */
 
 #define R_LOG_ORIGIN "disasm"
 
@@ -1906,39 +1906,58 @@ R_API int r_core_bb_starts_in_middle(RCore *core, ut64 at, int oplen) {
 
 static void ds_print_show_cursor(RDisasmState *ds) {
 	RCore *core = ds->core;
-	char res[] = "     ";
 	if (!ds->show_marks) {
 		return;
 	}
+	RCons *cons = core->cons;
 	ut64 cursor_addr = core->addr + ds->cursor;
-	int q = core->print->cur_enabled &&
+	bool has_cursor = core->print->cur_enabled &&
 		cursor_addr >= ds->at &&
 		cursor_addr < (ds->at + ds->asmop.size);
 
-	RBreakpointItem *p = r_bp_get_at (core->dbg->bp, ds->at);
+	bool has_bp = r_bp_get_at (core->dbg->bp, ds->at);
 	(void)handleMidFlags (core, ds, false);
 	if (ds->midbb) {
 		(void)handleMidBB (core, ds);
 	}
-	if (p) {
-		res[0] = 'b';
-	}
-	if (ds->hasMidflag || ds->hasMidbb) {
-		res[1] = '~';
-	}
-	if (q) {
-		r_cons_mark (ds->core->cons, UT64_MAX, "cursor");
-		if (cursor_addr == ds->at) {
-			res[2] = '*';
-		} else {
-			int i = 2, diff = cursor_addr - ds->at;
-			if (diff > 9) {
-				res[i++] = '0' + (diff / 10);
+
+	const bool use_utf = cons->use_utf8;
+	const bool has_mid = ds->hasMidflag || ds->hasMidbb;
+	const char *bp = use_utf ? (ds->show_color ? Color_RED"●"Color_RESET : "●") : "b";
+	RStrBuf sb;
+	r_strbuf_init (&sb);
+	r_strbuf_append (&sb, has_bp ? bp : " ");
+	r_strbuf_append (&sb, has_mid ? "~" : " ");
+
+	int cols = 1;
+	if (has_cursor) {
+		int diff = cursor_addr - ds->at;
+		r_cons_mark (cons, UT64_MAX, "cursor");
+		if (use_utf) {
+			if (diff) {
+				if (diff < 10) {
+					r_strbuf_appendf (&sb, "%d", diff);
+				} else {
+					r_strbuf_append (&sb, "?");
+				}
+			} else {
+				r_strbuf_append (&sb, " ");
 			}
-			res[i] = '0' + (diff % 10);
+			r_strbuf_append (&sb, "▶ ");
+			cols = 8;
+		} else {
+			if (diff == 0) {
+				r_strbuf_append (&sb, "*");
+			} else if (diff < 10) {
+				r_strbuf_appendf (&sb, "%d", diff);
+			} else {
+				r_strbuf_append (&sb, "?");
+			}
 		}
 	}
-	r_cons_print (ds->core->cons, res);
+	r_strbuf_pad (&sb, ' ', 4 - cols);
+	r_cons_print (cons, r_strbuf_get (&sb));
+	r_strbuf_fini (&sb);
 }
 
 static void ds_pre_xrefs(RDisasmState *ds, bool no_fcnlines) {
